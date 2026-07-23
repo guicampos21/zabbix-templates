@@ -1,0 +1,22 @@
+Seagate Exos Storage by HTTP - Zabbix 7.0 validation
+Template version: 1.0.4
+
+Changes:
+  - External Expansion Port Universal links (sas-port-type-numeric=5) no longer raise the generic status-abnormal trigger solely because they are Disconnected.
+  - Health triggers remain enabled for every SAS link, including expansion ports.
+  - Internal/non-expansion SAS links still raise the status-abnormal trigger when status is not Up.
+  - Added {$SEAGATE.ENCLOSURE.EXPECTED}, default 1.
+  - Added High trigger when reported enclosure count is below the configured expected count.
+
+Real disconnected expansion-port samples suppressed in validation: 6
+Synthetic disconnected internal SAS link still alerts: YES
+Standalone enclosure policy (actual 1 / expected 1): OK
+Missing expected expansion enclosure (actual 1 / expected 2): ALERT
+
+UUID fields checked: 410
+Invalid UUIDv4 fields: 0
+Duplicate UUID fields: 0
+YAML parse: PASS
+SHA-256: d2912c55e448f90ebbd8b4b209c05e23ab6ade5a8c8dc3ed61b9f312252e040f
+
+Result: PASS

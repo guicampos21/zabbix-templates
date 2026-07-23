@@ -1,0 +1,27 @@
+name: Validate templates
+
+on:
+  push:
+    paths:
+      - "templates/**"
+      - "scripts/validate_templates.rb"
+      - ".github/workflows/validate-templates.yml"
+  pull_request:
+    paths:
+      - "templates/**"
+      - "scripts/validate_templates.rb"
+      - ".github/workflows/validate-templates.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate template exports
+        run: ruby scripts/validate_templates.rb
