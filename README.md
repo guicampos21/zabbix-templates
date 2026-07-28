@@ -21,6 +21,7 @@ templates/
 └── <category>/
     └── <template-name>/
         ├── README.md
+        ├── MONITORING.md
         ├── CHANGELOG.md
         ├── template.yaml
         └── validation/

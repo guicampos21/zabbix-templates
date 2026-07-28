@@ -129,6 +129,18 @@ The template monitors health, capacity, utilization, performance, firmware,
 system read/write latency, error counters, the common event log, and structured
 active alerts when the storage model supports them.
 
+The complete object-level relationship is available in the
+[monitoring inventory](MONITORING.md). It lists all fixed items, discovery
+rules, item prototypes, fixed triggers, trigger prototypes, fixed graphs, and
+graph prototypes, including their Zabbix keys and severities.
+
+| Zabbix object | Fixed | LLD/prototype |
+|---|---:|---:|
+| Items | 78 | 192 |
+| Discovery rules | — | 14 |
+| Triggers | 24 | 80 |
+| Graphs | 2 | 19 |
+
 ## Important configuration macros
 
 | Macro | Default | Purpose |
