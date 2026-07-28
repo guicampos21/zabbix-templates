@@ -17,7 +17,7 @@ zabbix_export:
       Structured Alerts are auto-enabled for the tested 4006 identity. The tested 4005/4865 is monitored through component state plus the common Event Log. For guaranteed delivery of every asynchronous event, also configure the array native syslog or SNMP event forwarding.
     vendor:
       name: SentrixIT
-      version: 1.0.4
+      version: 1.0.6
     groups:
     - name: Templates/SAN
     items:
@@ -269,7 +269,9 @@ zabbix_export:
       history: '0'
       value_type: TEXT
       trends: '0'
-      description: Read-only performance statistics.
+      description: Read-only performance statistics. On Exos X 4006, the collector also queries native system read/write average
+        and maximum response-time metrics. On 4005/4865, the Metrics Framework is unsupported and system average latency is
+        derived from I/O-weighted host-port statistics.
       params: |
         function validate(p) {
             ['scheme','host','username','password'].forEach(function (f) {
@@ -324,6 +326,36 @@ zabbix_export:
         }
         function first(a) { return (a && a.length) ? a[0] : {}; }
         function array(o,k) { return (o && o[k] && Array.isArray(o[k])) ? o[k] : []; }
+        function fetchRawOptional(c, apiPath) {
+            var body, http;
+            try {
+                body = c.request.get(c.base + 'api/' + apiPath);
+                http = c.request.getStatus();
+            } catch (e) {
+                return null;
+            }
+            if (http < 200 || http >= 300) return null;
+            return body;
+        }
+        function parseMetricsBody(body) {
+            var clean;
+            if (!body) return null;
+            clean = String(body).replace(/:\s*N\/A(\s*[,}])/g, ':null$1');
+            try { return JSON.parse(clean); } catch (e) { return null; }
+        }
+        function latestMetricRow(o) {
+            var rows, best = null, bestTs = 0, i, ts;
+            if (!o || !o['metrics-query'] || !Array.isArray(o['metrics-query'])) return null;
+            rows = o['metrics-query'];
+            for (i = 0; i < rows.length; i++) {
+                ts = Number(rows[i]['time-stamp-numeric'] || 0);
+                if (ts > bestTs) {
+                    bestTs = ts;
+                    best = rows[i];
+                }
+            }
+            return best;
+        }
         function logout(c) {
             if (!c) return;
             try { c.request.get(c.base + 'api/exit'); } catch(e) {}
@@ -336,7 +368,13 @@ zabbix_export:
         }
 
         function flattenReset(a){ for(var i=0;i<a.length;i++){ var r=(a[i]['resettable-statistics']&&a[i]['resettable-statistics'][0])||{}; for(var k in r) if(typeof a[i][k]==='undefined') a[i][k]=r[k]; } return a; }
-        var p=JSON.parse(value), data={errors:''}, errors=[], o, a, i;
+        var p=JSON.parse(value), data={errors:''}, errors=[], o, a, i, mraw, mo, mst, mr;
+        data['system-latency-native'] = {
+            supported: 0,
+            source: 'Host Port Weighted Aggregate',
+            read_avg_us: 0,
+            write_avg_us: 0
+        };
         try {
             validate(p); var c=connect(p); data.endpoint=c.host;
             o=fetchApi(c,'show/controller-statistics','controller-statistics',errors,false); a=o?array(o,'controller-statistics'):[]; for(i=0;i<a.length;i++) if(a[i]['durable-id']) a[i]['durable-id']=String(a[i]['durable-id']).toLowerCase(); data['controller-statistics']=a;
@@ -345,6 +383,22 @@ zabbix_export:
             o=fetchApi(c,'show/pool-statistics','pool-statistics',errors,false); data['pool-statistics']=o?flattenReset(array(o,'pool-statistics')):[];
             o=fetchApi(c,'show/volume-statistics','volume-statistics',errors,false); data['volume-statistics']=o?array(o,'volume-statistics'):[];
             o=fetchApi(c,'show/host-port-statistics','host-port-statistics',errors,false); data['host-port-statistics']=o?array(o,'host-port-statistics'):[];
+            mraw=fetchRawOptional(c,'query/metrics/count/10/system.read-avg-response-time,system.write-avg-response-time,system.read-max-response-time,system.write-max-response-time');
+            mo=parseMetricsBody(mraw);
+            mst=finalStatus(mo);
+            mr=latestMetricRow(mo);
+            if (mo && mst && Number(mst['return-code']) === 0 && mr) {
+                data['system-latency-native'] = {
+                    supported: 1,
+                    source: 'Native Metrics Framework',
+                    read_avg_us: Number(mr['01'] || 0),
+                    write_avg_us: Number(mr['02'] || 0)
+                };
+                if (mr['03'] !== null && typeof mr['03'] !== 'undefined')
+                    data['system-latency-native'].read_max_us = Number(mr['03']);
+                if (mr['04'] !== null && typeof mr['04'] !== 'undefined')
+                    data['system-latency-native'].write_max_us = Number(mr['04']);
+            }
             o=fetchApi(c,'show/tier-statistics/tier/all','tier-statistics',errors,false); data['tier-statistics']=o?flattenReset(array(o,'tier-statistics')):[];
         } catch(e) { errors.push(String(e)); }
         if (typeof c !== 'undefined' && c) logout(c);
@@ -783,6 +837,194 @@ zabbix_export:
         tags:
         - tag: scope
           value: availability
+    - uuid: f1dcda18f47f45fa8675f72780d61bd7
+      name: 'System latency: Native metrics supported'
+      type: DEPENDENT
+      key: seagate.exos.system.latency.native_supported
+      delay: '0'
+      history: 7d
+      trends: '0'
+      description: 1 when the native Exos Metrics Framework returned valid system latency data; 0 when the host-port weighted
+        fallback is used.
+      preprocessing:
+      - type: JSONPATH
+        parameters:
+        - $['system-latency-native'].supported
+        error_handler: CUSTOM_VALUE
+        error_handler_params: '0'
+      master_item:
+        key: seagate.exos.get.performance
+      tags:
+      - tag: component
+        value: performance
+      - tag: component
+        value: internal
+    - uuid: 34ba0ae0dcf247e7b4fe7ccbd7fbcf01
+      name: 'System latency: Source'
+      type: DEPENDENT
+      key: seagate.exos.system.latency.source
+      delay: '0'
+      history: 31d
+      value_type: CHAR
+      trends: '0'
+      description: Source used for the unified system latency items. Exos X 4006 uses the native Metrics Framework; 4005/4865
+        uses an I/O-weighted aggregate of host-port response times.
+      preprocessing:
+      - type: JSONPATH
+        parameters:
+        - $['system-latency-native'].source
+        error_handler: CUSTOM_VALUE
+        error_handler_params: Host Port Weighted Aggregate
+      - type: DISCARD_UNCHANGED_HEARTBEAT
+        parameters:
+        - 1d
+      master_item:
+        key: seagate.exos.get.performance
+      tags:
+      - tag: component
+        value: performance
+    - uuid: c34a8b6ec217467c9249f29b761e81ab
+      name: 'System latency: Native read average response time'
+      type: DEPENDENT
+      key: seagate.exos.system.latency.native.read_avg
+      delay: '0'
+      history: 7d
+      value_type: FLOAT
+      trends: '0'
+      units: '!µs'
+      description: Native system read average response time from the Exos X 4006 Metrics Framework. Internal source for the
+        unified system latency item.
+      preprocessing:
+      - type: JSONPATH
+        parameters:
+        - $['system-latency-native'].read_avg_us
+        error_handler: CUSTOM_VALUE
+        error_handler_params: '0'
+      master_item:
+        key: seagate.exos.get.performance
+      tags:
+      - tag: component
+        value: performance
+      - tag: component
+        value: internal
+    - uuid: afed354f29d042258798529b5e3dc512
+      name: 'System latency: Native write average response time'
+      type: DEPENDENT
+      key: seagate.exos.system.latency.native.write_avg
+      delay: '0'
+      history: 7d
+      value_type: FLOAT
+      trends: '0'
+      units: '!µs'
+      description: Native system write average response time from the Exos X 4006 Metrics Framework. Internal source for the
+        unified system latency item.
+      preprocessing:
+      - type: JSONPATH
+        parameters:
+        - $['system-latency-native'].write_avg_us
+        error_handler: CUSTOM_VALUE
+        error_handler_params: '0'
+      master_item:
+        key: seagate.exos.get.performance
+      tags:
+      - tag: component
+        value: performance
+      - tag: component
+        value: internal
+    - uuid: bda9acd7f2e74ca78048f77183a06cf5
+      name: 'System: Read maximum response time'
+      type: DEPENDENT
+      key: seagate.exos.system.latency.read_max
+      delay: '0'
+      value_type: FLOAT
+      units: '!µs'
+      description: Native system maximum read response time. Available on Exos X 4006 via the Metrics Framework; no equivalent
+        maximum-latency metric was found for the tested 4005/4865 API.
+      preprocessing:
+      - type: JSONPATH
+        parameters:
+        - $['system-latency-native'].read_max_us
+        error_handler: DISCARD_VALUE
+      master_item:
+        key: seagate.exos.get.performance
+      tags:
+      - tag: component
+        value: performance
+    - uuid: b2c2c701daee433d97a2e8c796cb2e88
+      name: 'System: Write maximum response time'
+      type: DEPENDENT
+      key: seagate.exos.system.latency.write_max
+      delay: '0'
+      value_type: FLOAT
+      units: '!µs'
+      description: Native system maximum write response time. Available on Exos X 4006 via the Metrics Framework; no equivalent
+        maximum-latency metric was found for the tested 4005/4865 API.
+      preprocessing:
+      - type: JSONPATH
+        parameters:
+        - $['system-latency-native'].write_max_us
+        error_handler: DISCARD_VALUE
+      master_item:
+        key: seagate.exos.get.performance
+      tags:
+      - tag: component
+        value: performance
+    - uuid: 0608b46557b040f69107a5728a0b2479
+      name: 'System latency: Host-port weighted read average response time'
+      type: CALCULATED
+      key: seagate.exos.system.latency.fallback.read_avg
+      delay: '{$SEAGATE.INTERVAL.PERFORMANCE}'
+      value_type: FLOAT
+      units: '!µs'
+      params: sum(last_foreach(//seagate.exos.port.read_latency_weighted[*]))/max(sum(last_foreach(//seagate.exos.port.read_iops_derived[*])),1)
+      description: 4005/4865 system read latency fallback. It aggregates host-port average read response times using the derived
+        read I/O rate of each port as weight.
+      tags:
+      - tag: component
+        value: performance
+      - tag: component
+        value: calculation
+    - uuid: 2341b1971dc547edbaa1bf699e6eb055
+      name: 'System latency: Host-port weighted write average response time'
+      type: CALCULATED
+      key: seagate.exos.system.latency.fallback.write_avg
+      delay: '{$SEAGATE.INTERVAL.PERFORMANCE}'
+      value_type: FLOAT
+      units: '!µs'
+      params: sum(last_foreach(//seagate.exos.port.write_latency_weighted[*]))/max(sum(last_foreach(//seagate.exos.port.write_iops_derived[*])),1)
+      description: 4005/4865 system write latency fallback. It aggregates host-port average write response times using the
+        derived write I/O rate of each port as weight.
+      tags:
+      - tag: component
+        value: performance
+      - tag: component
+        value: calculation
+    - uuid: 1fc82adc30664ba880bcc7bc1b39241e
+      name: 'System: Read average response time'
+      type: CALCULATED
+      key: seagate.exos.system.latency.read_avg
+      delay: '{$SEAGATE.INTERVAL.PERFORMANCE}'
+      value_type: FLOAT
+      units: '!µs'
+      params: last(//seagate.exos.system.latency.native_supported)*last(//seagate.exos.system.latency.native.read_avg)+(1-last(//seagate.exos.system.latency.native_supported))*last(//seagate.exos.system.latency.fallback.read_avg)
+      description: Unified system read average response time. Uses the native Exos X 4006 system metric when available, otherwise
+        the 4005/4865 host-port weighted fallback.
+      tags:
+      - tag: component
+        value: performance
+    - uuid: d5649cd8e1ab4dd3a3727d4664a3dce5
+      name: 'System: Write average response time'
+      type: CALCULATED
+      key: seagate.exos.system.latency.write_avg
+      delay: '{$SEAGATE.INTERVAL.PERFORMANCE}'
+      value_type: FLOAT
+      units: '!µs'
+      params: last(//seagate.exos.system.latency.native_supported)*last(//seagate.exos.system.latency.native.write_avg)+(1-last(//seagate.exos.system.latency.native_supported))*last(//seagate.exos.system.latency.fallback.write_avg)
+      description: Unified system write average response time. Uses the native Exos X 4006 system metric when available, otherwise
+        the 4005/4865 host-port weighted fallback.
+      tags:
+      - tag: component
+        value: performance
     - uuid: c05ba2259e3140f4b63eb35d9e9277b7
       name: Inventory API method errors
       type: DEPENDENT
@@ -1457,11 +1699,12 @@ zabbix_export:
         value: storage
       triggers:
       - uuid: a49ffa597fd34d959106c57e2951c49d
-        expression: 'last(/Seagate Exos Storage by HTTP/seagate.exos.system.enclosure_count)<{$SEAGATE.ENCLOSURE.EXPECTED}'
+        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.system.enclosure_count)<{$SEAGATE.ENCLOSURE.EXPECTED}
         name: 'Seagate Exos Storage: Enclosure count is below expected'
         event_name: 'Seagate Exos Storage: Enclosure count is below expected (current {ITEM.LASTVALUE1}, expected {$SEAGATE.ENCLOSURE.EXPECTED})'
         priority: HIGH
-        description: 'The storage reports fewer enclosures than expected. Set {$SEAGATE.ENCLOSURE.EXPECTED} to the controller enclosure plus all expansion enclosures that should normally be present. Default is 1.'
+        description: The storage reports fewer enclosures than expected. Set {$SEAGATE.ENCLOSURE.EXPECTED} to the controller
+          enclosure plus all expansion enclosures that should normally be present. Default is 1.
         tags:
         - tag: scope
           value: availability
@@ -1749,7 +1992,8 @@ zabbix_export:
         value: inventory
       triggers:
       - uuid: 25395b0aa19d49c2b97b98d5164488b2
-        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.system.bundle_version,#1)<>last(/Seagate Exos Storage by HTTP/seagate.exos.system.bundle_version,#2)
+        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.system.bundle_version,#1)<>last(/Seagate Exos Storage
+          by HTTP/seagate.exos.system.bundle_version,#2)
         name: 'Seagate Exos Storage: System firmware bundle changed'
         priority: INFO
         description: The storage system firmware bundle version changed.
@@ -1777,7 +2021,8 @@ zabbix_export:
         value: events
       triggers:
       - uuid: 99bd65a502f442a9af41d33cf1126f75
-        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_warning.id,#1)<>last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_warning.id,#2) and length(last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_warning.message))>0
+        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_warning.id,#1)<>last(/Seagate Exos Storage
+          by HTTP/seagate.exos.event.latest_warning.id,#2) and length(last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_warning.message))>0
         name: 'Seagate Exos Storage: New warning event detected'
         priority: WARNING
         event_name: 'Seagate Exos Storage: New warning event {ITEM.LASTVALUE1}: {ITEM.LASTVALUE2}'
@@ -1825,7 +2070,8 @@ zabbix_export:
         value: events
       triggers:
       - uuid: b98adb3aaf4140a58116ab15bb3b1319
-        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_error.id,#1)<>last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_error.id,#2) and length(last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_error.message))>0
+        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_error.id,#1)<>last(/Seagate Exos Storage
+          by HTTP/seagate.exos.event.latest_error.id,#2) and length(last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_error.message))>0
         name: 'Seagate Exos Storage: New error event detected'
         priority: HIGH
         event_name: 'Seagate Exos Storage: New error event {ITEM.LASTVALUE1}: {ITEM.LASTVALUE2}'
@@ -1873,7 +2119,8 @@ zabbix_export:
         value: events
       triggers:
       - uuid: 697c09d9c5d5412baeeb9082bbecd3f1
-        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_critical.id,#1)<>last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_critical.id,#2) and length(last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_critical.message))>0
+        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_critical.id,#1)<>last(/Seagate Exos Storage
+          by HTTP/seagate.exos.event.latest_critical.id,#2) and length(last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_critical.message))>0
         name: 'Seagate Exos Storage: New critical event detected'
         priority: DISASTER
         event_name: 'Seagate Exos Storage: New critical event {ITEM.LASTVALUE1}: {ITEM.LASTVALUE2}'
@@ -1958,7 +2205,8 @@ zabbix_export:
         value: alerts
       triggers:
       - uuid: 6c505c2deffc4488ab56fb918a4350e4
-        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.active_warning)>0 and length(last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.summary))>=0
+        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.active_warning)>0 and length(last(/Seagate Exos
+          Storage by HTTP/seagate.exos.alerts.summary))>=0
         name: 'Seagate Exos Storage: Active warning alert conditions'
         priority: WARNING
         event_name: 'Seagate Exos Storage: {ITEM.LASTVALUE1} active warning alert(s): {ITEM.LASTVALUE2}'
@@ -1983,7 +2231,8 @@ zabbix_export:
         value: alerts
       triggers:
       - uuid: 1555f477104f458eb3a8c0d51a07e107
-        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.active_error)>0 and length(last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.summary))>=0
+        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.active_error)>0 and length(last(/Seagate Exos Storage
+          by HTTP/seagate.exos.alerts.summary))>=0
         name: 'Seagate Exos Storage: Active error alert conditions'
         priority: HIGH
         event_name: 'Seagate Exos Storage: {ITEM.LASTVALUE1} active error alert(s): {ITEM.LASTVALUE2}'
@@ -2008,7 +2257,8 @@ zabbix_export:
         value: alerts
       triggers:
       - uuid: f9e2b88d018742c9bffcf8b54680f9a8
-        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.active_critical)>0 and length(last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.summary))>=0
+        expression: last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.active_critical)>0 and length(last(/Seagate Exos
+          Storage by HTTP/seagate.exos.alerts.summary))>=0
         name: 'Seagate Exos Storage: Active critical alert conditions'
         priority: DISASTER
         event_name: 'Seagate Exos Storage: {ITEM.LASTVALUE1} active critical alert(s): {ITEM.LASTVALUE2}'
@@ -2053,7 +2303,8 @@ zabbix_export:
         preprocessing:
         - type: JAVASCRIPT
           parameters:
-          - var a=JSON.parse(value), id=String('{#CONTROLLER.ID}').toLowerCase(); for(var i=0;i<a.length;i++) if(String(a[i]['durable-id']).toLowerCase()==='controller_'+id) return JSON.stringify(a[i]); throw 'Controller statistics not found';
+          - var a=JSON.parse(value), id=String('{#CONTROLLER.ID}').toLowerCase(); for(var i=0;i<a.length;i++) if(String(a[i]['durable-id']).toLowerCase()==='controller_'+id)
+            return JSON.stringify(a[i]); throw 'Controller statistics not found';
         master_item:
           key: seagate.exos.get.controllerstats
         tags:
@@ -2255,7 +2506,8 @@ zabbix_export:
           value: controller
         trigger_prototypes:
         - uuid: c18eb3215dc248dc8696dbca40ee8f72
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.controller.firmware["{#CONTROLLER.ID}"],#1)<>last(/Seagate Exos Storage by HTTP/seagate.exos.controller.firmware["{#CONTROLLER.ID}"],#2)
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.controller.firmware["{#CONTROLLER.ID}"],#1)<>last(/Seagate
+            Exos Storage by HTTP/seagate.exos.controller.firmware["{#CONTROLLER.ID}"],#2)
           name: 'Seagate Exos Storage: Controller [{#CONTROLLER.ID}] firmware changed'
           priority: INFO
           description: The controller firmware version changed.
@@ -2771,7 +3023,8 @@ zabbix_export:
           value: disk
         trigger_prototypes:
         - uuid: 3e4d32ae53594dd99b230247fb210ec5
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.firmware["{#DURABLE.ID}"],#1)<>last(/Seagate Exos Storage by HTTP/seagate.exos.disk.firmware["{#DURABLE.ID}"],#2)
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.firmware["{#DURABLE.ID}"],#1)<>last(/Seagate Exos
+            Storage by HTTP/seagate.exos.disk.firmware["{#DURABLE.ID}"],#2)
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] firmware changed'
           priority: INFO
           description: The disk firmware revision changed.
@@ -2921,7 +3174,8 @@ zabbix_export:
           value: disk
         trigger_prototypes:
         - uuid: 3a72651b21e9457b81596537aa5ff776
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.job["{#DURABLE.ID}"],#1)<>last(/Seagate Exos Storage by HTTP/seagate.exos.disk.job["{#DURABLE.ID}"],#2)
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.job["{#DURABLE.ID}"],#1)<>last(/Seagate Exos Storage
+            by HTTP/seagate.exos.disk.job["{#DURABLE.ID}"],#2)
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] job state changed'
           priority: INFO
           description: A disk background job started, stopped, or changed.
@@ -3081,7 +3335,8 @@ zabbix_export:
           value: disk
         trigger_prototypes:
         - uuid: 63313472f4894290b40b5604c70d3f55
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.ssd_life["{#DURABLE.ID}"])<{$SEAGATE.SSD.LIFE.WARN} and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.ssd_life["{#DURABLE.ID}"])<>255
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.ssd_life["{#DURABLE.ID}"])<{$SEAGATE.SSD.LIFE.WARN}
+            and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.ssd_life["{#DURABLE.ID}"])<>255
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] SSD life is low'
           priority: WARNING
           description: SSD remaining life is below the configured threshold.
@@ -3197,7 +3452,8 @@ zabbix_export:
           value: disk
         trigger_prototypes:
         - uuid: 0f94148c71934b09a521b643645a137a
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.media_errors["{#DURABLE.ID}"])>last(/Seagate Exos Storage by HTTP/seagate.exos.disk.media_errors["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.media_errors["{#DURABLE.ID}"])>0
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.media_errors["{#DURABLE.ID}"])>last(/Seagate Exos
+            Storage by HTTP/seagate.exos.disk.media_errors["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.media_errors["{#DURABLE.ID}"])>0
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] media errors increased'
           priority: HIGH
           description: The cumulative media errors counter increased.
@@ -3221,7 +3477,9 @@ zabbix_export:
           value: disk
         trigger_prototypes:
         - uuid: 6dc7abe022994f68b85b7a182bf25c75
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.nonmedia_errors["{#DURABLE.ID}"])>last(/Seagate Exos Storage by HTTP/seagate.exos.disk.nonmedia_errors["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.nonmedia_errors["{#DURABLE.ID}"])>0
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.nonmedia_errors["{#DURABLE.ID}"])>last(/Seagate
+            Exos Storage by HTTP/seagate.exos.disk.nonmedia_errors["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by
+            HTTP/seagate.exos.disk.nonmedia_errors["{#DURABLE.ID}"])>0
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] non-media errors increased'
           priority: WARNING
           description: The cumulative non-media errors counter increased.
@@ -3245,7 +3503,8 @@ zabbix_export:
           value: disk
         trigger_prototypes:
         - uuid: d6e6ce3fb5614b74b54b723b491259fe
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.timeouts["{#DURABLE.ID}"])>last(/Seagate Exos Storage by HTTP/seagate.exos.disk.timeouts["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.timeouts["{#DURABLE.ID}"])>0
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.timeouts["{#DURABLE.ID}"])>last(/Seagate Exos Storage
+            by HTTP/seagate.exos.disk.timeouts["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.timeouts["{#DURABLE.ID}"])>0
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] i/o timeouts increased'
           priority: HIGH
           description: The cumulative i/o timeouts counter increased.
@@ -3269,7 +3528,8 @@ zabbix_export:
           value: disk
         trigger_prototypes:
         - uuid: 088aa5aaf5a641ebbc001fdaa554668e
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.no_response["{#DURABLE.ID}"])>last(/Seagate Exos Storage by HTTP/seagate.exos.disk.no_response["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.no_response["{#DURABLE.ID}"])>0
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.no_response["{#DURABLE.ID}"])>last(/Seagate Exos
+            Storage by HTTP/seagate.exos.disk.no_response["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.no_response["{#DURABLE.ID}"])>0
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] no-response events increased'
           priority: HIGH
           description: The cumulative no-response events counter increased.
@@ -3293,7 +3553,8 @@ zabbix_export:
           value: disk
         trigger_prototypes:
         - uuid: 7f8e8e831f03400a9b54cf85450c35b3
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.bad_blocks["{#DURABLE.ID}"])>last(/Seagate Exos Storage by HTTP/seagate.exos.disk.bad_blocks["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.bad_blocks["{#DURABLE.ID}"])>0
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.bad_blocks["{#DURABLE.ID}"])>last(/Seagate Exos
+            Storage by HTTP/seagate.exos.disk.bad_blocks["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.bad_blocks["{#DURABLE.ID}"])>0
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] bad blocks increased'
           priority: HIGH
           description: The cumulative bad blocks counter increased.
@@ -3317,7 +3578,8 @@ zabbix_export:
           value: disk
         trigger_prototypes:
         - uuid: 1e6a2dfda6cb48e0bd824b926f3c95c2
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.reassigns["{#DURABLE.ID}"])>last(/Seagate Exos Storage by HTTP/seagate.exos.disk.reassigns["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.reassigns["{#DURABLE.ID}"])>0
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.reassigns["{#DURABLE.ID}"])>last(/Seagate Exos
+            Storage by HTTP/seagate.exos.disk.reassigns["{#DURABLE.ID}"],#2) and last(/Seagate Exos Storage by HTTP/seagate.exos.disk.reassigns["{#DURABLE.ID}"])>0
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] block reassignments increased'
           priority: WARNING
           description: The cumulative block reassignments counter increased.
@@ -3473,7 +3735,8 @@ zabbix_export:
           value: disk-group
         trigger_prototypes:
         - uuid: 419a7d448f4b46d4a1a5f2ba98629291
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=1 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=8 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=9
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=1 or last(/Seagate Exos
+            Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=8 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=9
           name: 'Seagate Exos Storage: Disk group [{#NAME}] is degraded'
           priority: HIGH
           description: Disk group is fault-tolerant but degraded, missing, or damaged.
@@ -3481,7 +3744,10 @@ zabbix_export:
           - tag: scope
             value: availability
         - uuid: 027c2f2724fb43a7a287f7c47ef89d8b
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=2 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=3 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=4 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=5 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=6 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=7
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=2 or last(/Seagate Exos
+            Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=3 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=4
+            or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=5 or last(/Seagate Exos Storage
+            by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=6 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=7
           name: 'Seagate Exos Storage: Disk group [{#NAME}] is critical or offline'
           priority: DISASTER
           description: Disk group is critical, offline, quarantined, or stopped.
@@ -3610,7 +3876,8 @@ zabbix_export:
           value: disk-group
         trigger_prototypes:
         - uuid: 5cf1ee87671446f3bfb03e054996396c
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.job["{#NAME}"],#1)<>last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.job["{#NAME}"],#2)
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.job["{#NAME}"],#1)<>last(/Seagate Exos Storage
+            by HTTP/seagate.exos.diskgroup.job["{#NAME}"],#2)
           name: 'Seagate Exos Storage: Disk group [{#NAME}] job state changed'
           priority: INFO
           description: A disk-group background job started, stopped, or changed.
@@ -3638,7 +3905,8 @@ zabbix_export:
           value: disk-group
         trigger_prototypes:
         - uuid: 5b474b80ce7a40a0b7fe9304278cd6ef
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.owner_numeric["{#NAME}"])<>last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.preferred_owner_numeric["{#NAME}"]) and {$SEAGATE.OWNER.MISMATCH.ENABLED}=1
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.owner_numeric["{#NAME}"])<>last(/Seagate Exos
+            Storage by HTTP/seagate.exos.diskgroup.preferred_owner_numeric["{#NAME}"]) and {$SEAGATE.OWNER.MISMATCH.ENABLED}=1
           name: 'Seagate Exos Storage: Disk group [{#NAME}] owner differs from preferred owner'
           priority: WARNING
           description: Current owner differs from preferred owner.
@@ -4531,7 +4799,8 @@ zabbix_export:
           value: volume
         trigger_prototypes:
         - uuid: 1b944a220bd14f11916580a2d145bf99
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.volume.owner_numeric["{#DURABLE.ID}"])<>last(/Seagate Exos Storage by HTTP/seagate.exos.volume.preferred_owner_numeric["{#DURABLE.ID}"]) and {$SEAGATE.OWNER.MISMATCH.ENABLED}=1
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.volume.owner_numeric["{#DURABLE.ID}"])<>last(/Seagate
+            Exos Storage by HTTP/seagate.exos.volume.preferred_owner_numeric["{#DURABLE.ID}"]) and {$SEAGATE.OWNER.MISMATCH.ENABLED}=1
           name: 'Seagate Exos Storage: Volume [{#NAME}] owner differs from preferred owner'
           priority: WARNING
           description: Current owner differs from preferred owner.
@@ -4580,7 +4849,8 @@ zabbix_export:
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.volume.writeback["{#DURABLE.ID}"])=0 and {$SEAGATE.VOLUME.WRITEBACK.REQUIRED:"{#NAME}"}=1
           name: 'Seagate Exos Storage: Volume [{#NAME}] is not using write-back'
           priority: HIGH
-          description: The volume is not using write-back policy. Disable the context macro for intentionally configured write-through volumes.
+          description: The volume is not using write-back policy. Disable the context macro for intentionally configured write-through
+            volumes.
           tags:
           - tag: scope
             value: availability
@@ -4602,7 +4872,8 @@ zabbix_export:
           value: volume
         trigger_prototypes:
         - uuid: 931debd6431740f2b7cf37fa716eaca7
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.volume.progress["{#DURABLE.ID}"])>0 and last(/Seagate Exos Storage by HTTP/seagate.exos.volume.progress["{#DURABLE.ID}"])<100
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.volume.progress["{#DURABLE.ID}"])>0 and last(/Seagate
+            Exos Storage by HTTP/seagate.exos.volume.progress["{#DURABLE.ID}"])<100
           name: 'Seagate Exos Storage: Volume [{#NAME}] operation is active'
           priority: INFO
           description: A volume operation is in progress.
@@ -4890,7 +5161,8 @@ zabbix_export:
         preprocessing:
         - type: JAVASCRIPT
           parameters:
-          - var o=JSON.parse(value),t=Number(o['total-size-numeric']||0),a=Number(o['allocated-size-numeric']||0); return t>0?a*100/t:0;
+          - var o=JSON.parse(value),t=Number(o['total-size-numeric']||0),a=Number(o['allocated-size-numeric']||0); return
+            t>0?a*100/t:0;
         master_item:
           key: seagate.exos.tier.get["{#SERIAL}"]
         tags:
@@ -5615,7 +5887,8 @@ zabbix_export:
           value: fan
         trigger_prototypes:
         - uuid: 0d118feccb16437fba442dba2e1a7638
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.fan.speed["{#DURABLE.ID}"])=0 and last(/Seagate Exos Storage by HTTP/seagate.exos.fan.status["{#DURABLE.ID}"])=0
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.fan.speed["{#DURABLE.ID}"])=0 and last(/Seagate Exos
+            Storage by HTTP/seagate.exos.fan.status["{#DURABLE.ID}"])=0
           name: 'Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] speed is zero'
           priority: HIGH
           description: The fan is reported Up but speed is zero.
@@ -5882,7 +6155,8 @@ zabbix_export:
           - tag: scope
             value: availability
         - uuid: 1d02430686ad490e8d6c2274f13636a5
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.sensor.status["{#DURABLE.ID}"])=2 or last(/Seagate Exos Storage by HTTP/seagate.exos.sensor.status["{#DURABLE.ID}"])=4
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.sensor.status["{#DURABLE.ID}"])=2 or last(/Seagate Exos
+            Storage by HTTP/seagate.exos.sensor.status["{#DURABLE.ID}"])=4
           name: 'Seagate Exos Storage: Sensor [{#NAME}] reports Critical or Unrecoverable'
           priority: HIGH
           description: The storage sensor reports Critical or Unrecoverable state.
@@ -6033,10 +6307,12 @@ zabbix_export:
           value: sas
         trigger_prototypes:
         - uuid: f4e8e50bfb1a401db8362bc09f27e96d
-          expression: 'last(/Seagate Exos Storage by HTTP/seagate.exos.saslink.status["{#DURABLE.ID}"])<>0 and {#SAS.PORT.TYPE.NUMERIC}<>5'
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.saslink.status["{#DURABLE.ID}"])<>0 and {#SAS.PORT.TYPE.NUMERIC}<>5
           name: 'Seagate Exos Storage: SAS link [{#NAME}] status is abnormal'
           priority: HIGH
-          description: 'SAS link status is abnormal for a non-expansion link. External Expansion Port Universal links are excluded from status-only alerting because an unused or terminal expansion port can legitimately be Disconnected. Expansion-port health and expected enclosure count are monitored separately.'
+          description: SAS link status is abnormal for a non-expansion link. External Expansion Port Universal links are excluded
+            from status-only alerting because an unused or terminal expansion port can legitimately be Disconnected. Expansion-port
+            health and expected enclosure count are monitored separately.
           tags:
           - tag: scope
             value: availability
@@ -6290,7 +6566,8 @@ zabbix_export:
           value: port
         trigger_prototypes:
         - uuid: 1a7906cd0ab041d78bdf401188c9cb03
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.port.speed["{#DURABLE.ID}"],#1)<>last(/Seagate Exos Storage by HTTP/seagate.exos.port.speed["{#DURABLE.ID}"],#2)
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.port.speed["{#DURABLE.ID}"],#1)<>last(/Seagate Exos
+            Storage by HTTP/seagate.exos.port.speed["{#DURABLE.ID}"],#2)
           name: 'Seagate Exos Storage: Host port [{#PORT.ID}] negotiated speed changed'
           priority: WARNING
           description: The negotiated host-port speed changed.
@@ -6320,7 +6597,8 @@ zabbix_export:
           value: port
         trigger_prototypes:
         - uuid: fb71b2a6685b48d58e8902eeafe6b967
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.port.sfp_present["{#DURABLE.ID}"])=0 and last(/Seagate Exos Storage by HTTP/seagate.exos.port.sfp_present["{#DURABLE.ID}"],#2)=1 and {$SEAGATE.PORT.DOWN.ENABLED:"{#PORT.ID}"}=1
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.port.sfp_present["{#DURABLE.ID}"])=0 and last(/Seagate
+            Exos Storage by HTTP/seagate.exos.port.sfp_present["{#DURABLE.ID}"],#2)=1 and {$SEAGATE.PORT.DOWN.ENABLED:"{#PORT.ID}"}=1
           name: 'Seagate Exos Storage: SFP removed from host port [{#PORT.ID}]'
           priority: HIGH
           description: An SFP that was present was removed from this host port.
@@ -6349,7 +6627,8 @@ zabbix_export:
           value: port
         trigger_prototypes:
         - uuid: 51ec1b542d4e4a829f861629e9fdc448
-          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.port.sfp_present["{#DURABLE.ID}"])=1 and last(/Seagate Exos Storage by HTTP/seagate.exos.port.sfp_status["{#DURABLE.ID}"])<>3 and {$SEAGATE.PORT.DOWN.ENABLED:"{#PORT.ID}"}=1
+          expression: last(/Seagate Exos Storage by HTTP/seagate.exos.port.sfp_present["{#DURABLE.ID}"])=1 and last(/Seagate
+            Exos Storage by HTTP/seagate.exos.port.sfp_status["{#DURABLE.ID}"])<>3 and {$SEAGATE.PORT.DOWN.ENABLED:"{#PORT.ID}"}=1
           name: 'Seagate Exos Storage: SFP status is abnormal on host port [{#PORT.ID}]'
           priority: HIGH
           description: The installed SFP is incompatible or uses the incorrect protocol.
@@ -6403,6 +6682,86 @@ zabbix_export:
         tags:
         - tag: component
           value: performance
+      - uuid: d08b157c0d0744e088cdeab6bb992676
+        name: 'Host port [{#PORT.ID}]: Read I/O rate'
+        type: DEPENDENT
+        key: seagate.exos.port.read_iops_derived["{#DURABLE.ID}"]
+        delay: '0'
+        value_type: FLOAT
+        units: '!iops'
+        description: Read operations per second derived from the cumulative number-of-reads counter. Used to weight host-port
+          read latency for the 4005/4865 system latency fallback.
+        preprocessing:
+        - type: JSONPATH
+          parameters:
+          - $['number-of-reads']
+          error_handler: DISCARD_VALUE
+        - type: CHANGE_PER_SECOND
+          parameters:
+          - ''
+        master_item:
+          key: seagate.exos.port.stats.get["{#DURABLE.ID}"]
+        tags:
+        - tag: component
+          value: performance
+        - tag: host-port
+          value: '{#PORT.ID}'
+      - uuid: fa32d8bedace46f8b7d3d572e0ab9d79
+        name: 'Host port [{#PORT.ID}]: Write I/O rate'
+        type: DEPENDENT
+        key: seagate.exos.port.write_iops_derived["{#DURABLE.ID}"]
+        delay: '0'
+        value_type: FLOAT
+        units: '!iops'
+        description: Write operations per second derived from the cumulative number-of-writes counter. Used to weight host-port
+          write latency for the 4005/4865 system latency fallback.
+        preprocessing:
+        - type: JSONPATH
+          parameters:
+          - $['number-of-writes']
+          error_handler: DISCARD_VALUE
+        - type: CHANGE_PER_SECOND
+          parameters:
+          - ''
+        master_item:
+          key: seagate.exos.port.stats.get["{#DURABLE.ID}"]
+        tags:
+        - tag: component
+          value: performance
+        - tag: host-port
+          value: '{#PORT.ID}'
+      - uuid: b0e44a5dc1274ab7abbe012b1d12a1e7
+        name: 'Host port [{#PORT.ID}]: Read latency weighted contribution'
+        type: CALCULATED
+        key: seagate.exos.port.read_latency_weighted["{#DURABLE.ID}"]
+        delay: '{$SEAGATE.INTERVAL.PERFORMANCE}'
+        history: 1d
+        value_type: FLOAT
+        trends: '0'
+        params: last(//seagate.exos.port.read_latency["{#DURABLE.ID}"])*1000000*last(//seagate.exos.port.read_iops_derived["{#DURABLE.ID}"])
+        description: 'Internal weighted contribution: host-port read average response time in microseconds multiplied by derived
+          read IOPS.'
+        tags:
+        - tag: component
+          value: calculation
+        - tag: host-port
+          value: '{#PORT.ID}'
+      - uuid: e4d67d5f3bb94ee4a4783023e230b0bd
+        name: 'Host port [{#PORT.ID}]: Write latency weighted contribution'
+        type: CALCULATED
+        key: seagate.exos.port.write_latency_weighted["{#DURABLE.ID}"]
+        delay: '{$SEAGATE.INTERVAL.PERFORMANCE}'
+        history: 1d
+        value_type: FLOAT
+        trends: '0'
+        params: last(//seagate.exos.port.write_latency["{#DURABLE.ID}"])*1000000*last(//seagate.exos.port.write_iops_derived["{#DURABLE.ID}"])
+        description: 'Internal weighted contribution: host-port write average response time in microseconds multiplied by
+          derived write IOPS.'
+        tags:
+        - tag: component
+          value: calculation
+        - tag: host-port
+          value: '{#PORT.ID}'
       - uuid: 10558887c8454ad7bde6e096c21a206f
         name: 'Host port [{#PORT.ID}]: Response time'
         type: DEPENDENT
@@ -6505,13 +6864,15 @@ zabbix_export:
       preprocessing:
       - type: JAVASCRIPT
         parameters:
-        - var a=JSON.parse(value); for(var i=0;i<a.length;i++) a[i]['lld-port-id']=String(a[i].controller||'')+String(a[i].port||''); return JSON.stringify(a);
+        - var a=JSON.parse(value); for(var i=0;i<a.length;i++) a[i]['lld-port-id']=String(a[i].controller||'')+String(a[i].port||'');
+          return JSON.stringify(a);
     - uuid: 8953ff9703684b2b95a7e4b66ea00ce9
       name: Replication sets discovery
       type: DEPENDENT
       key: seagate.exos.replications.discovery
       delay: '0'
-      description: Discovers configured replication sets. Runtime field behavior requires validation on an array with active replication.
+      description: Discovers configured replication sets. Runtime field behavior requires validation on an array with active
+        replication.
       item_prototypes:
       - uuid: da7c7aa62780424e8c8c02ca6f1d1ec9
         name: 'Replication set [{#NAME}]: Get data'
@@ -6620,7 +6981,8 @@ zabbix_export:
       description: Optional partner controller management hostname or IP address.
     - macro: '{$SEAGATE.API.PORT}'
       value: '443'
-      description: Storage management API TCP port used in every API URL. Defaults to HTTPS TCP/443; override this macro at host level when the array management API listens on a different port.
+      description: Storage management API TCP port used in every API URL. Defaults to HTTPS TCP/443; override this macro at
+        host level when the array management API listens on a different port.
     - macro: '{$SEAGATE.API.SCHEME}'
       value: https
       description: 'API scheme: https or http.'
@@ -6662,7 +7024,8 @@ zabbix_export:
       description: Set to 1 to alert when NTP is not activated.
     - macro: '{$SEAGATE.ENCLOSURE.EXPECTED}'
       value: '1'
-      description: Expected total enclosure count, including the controller enclosure. Use 1 for a standalone array, 2 for controller enclosure plus one expansion enclosure, and so on.
+      description: Expected total enclosure count, including the controller enclosure. Use 1 for a standalone array, 2 for
+        controller enclosure plus one expansion enclosure, and so on.
     - macro: '{$SEAGATE.PORT.DOWN.ENABLED}'
       value: '1'
       description: Enable host-port/SFP alerts. Override by context, for example {$SEAGATE.PORT.DOWN.ENABLED:"A3"}=0.
@@ -6902,3 +7265,28 @@ zabbix_export:
         newvalue: Critical
       - value: '4'
         newvalue: Resolved
+  graphs:
+  - uuid: 495b817859a54d20b723a62e8fc11085
+    name: System latency
+    graph_items:
+    - color: 199C0D
+      item:
+        host: Seagate Exos Storage by HTTP
+        key: seagate.exos.system.latency.read_avg
+    - sortorder: '1'
+      color: F63100
+      item:
+        host: Seagate Exos Storage by HTTP
+        key: seagate.exos.system.latency.write_avg
+  - uuid: 0053beecc0b042d4901ca530fb61c3eb
+    name: System maximum latency (4006 native)
+    graph_items:
+    - color: 2774A4
+      item:
+        host: Seagate Exos Storage by HTTP
+        key: seagate.exos.system.latency.read_max
+    - sortorder: '1'
+      color: F7941D
+      item:
+        host: Seagate Exos Storage by HTTP
+        key: seagate.exos.system.latency.write_max
