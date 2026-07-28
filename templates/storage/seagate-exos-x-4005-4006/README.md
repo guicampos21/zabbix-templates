@@ -92,6 +92,8 @@ Verify the following:
    ports, enclosures, and other installed components.
 4. Unsupported firmware-specific fields do not affect required monitoring.
 5. Trigger thresholds and port policies match the storage configuration.
+6. `System latency: Source` identifies either the native 4006 metrics or the
+   4005/4865 host-port weighted fallback.
 
 The default collection schedule is:
 
@@ -124,8 +126,8 @@ Low-level discovery covers:
 - Replication sets
 
 The template monitors health, capacity, utilization, performance, firmware,
-error counters, the common event log, and structured active alerts when the
-storage model supports them.
+system read/write latency, error counters, the common event log, and structured
+active alerts when the storage model supports them.
 
 ## Important configuration macros
 
@@ -176,6 +178,63 @@ port or the last port in an enclosure chain. Health monitoring remains enabled
 for all SAS links, while abnormal internal or non-expansion SAS links continue
 to generate problems.
 
+## System latency
+
+Version 1.0.6 provides one unified system-latency view while selecting the
+collection method supported by the storage model.
+
+### Exos X 4006 native metrics
+
+On Exos X 4006, the template queries these read-only Metrics Framework values:
+
+- `system.read-avg-response-time`
+- `system.write-avg-response-time`
+- `system.read-max-response-time`
+- `system.write-max-response-time`
+
+The collector only runs `query metrics`; it does not call `start metrics` or
+`stop metrics`. Bare `N/A` tokens occasionally returned by the API are sanitized
+before the response is parsed as JSON.
+
+### 4005/4865 fallback
+
+The tested 4005/4865 API does not expose the Metrics Framework. For that system,
+the template derives the host-facing average read and write latency from
+`show host-port-statistics`.
+
+It derives the read and write I/O rate of each host port from its cumulative
+counters and calculates an I/O-weighted aggregate:
+
+```text
+sum(port_latency_us × port_IO_rate) / sum(port_IO_rate)
+```
+
+Comparison with native 4006 metrics over clean, aligned intervals produced:
+
+| Measurement | Read | Write |
+|---|---:|---:|
+| Mean absolute error | approximately 3.05% | approximately 18.16% |
+| Pearson correlation | approximately 0.9201 | approximately 0.9605 |
+
+`System latency: Source` shows which method currently feeds the unified items.
+
+### Items and graphs
+
+The system-latency items are:
+
+- `System: Read average response time`
+- `System: Write average response time`
+- `System: Read maximum response time` — native 4006 only
+- `System: Write maximum response time` — native 4006 only
+- `System latency: Source`
+
+All system-latency values are stored and displayed in microseconds. The template
+includes the `System latency` graph for average read/write time and the
+`System maximum latency (4006 native)` graph for native maximum values.
+
+Pool, disk-group, and host-port latency graphs remain available because they
+represent different layers of the storage I/O path.
+
 ## Hardware and model compatibility
 
 | Scope | Supported target |
@@ -194,6 +253,8 @@ to generate problems.
 | Enclosures, FRUs, fans, PSUs, and sensors | Validated | Validated |
 | SAS link and expander health | Validated | Validated |
 | Host ports and SFP data | Validated | Validated |
+| Unified system average latency | Weighted fallback | Native metrics |
+| System maximum latency | Not exposed by tested API | Native metrics |
 | Common Event Log | Validated | Validated |
 | Structured active Alerts | Not exposed by tested API | Validated |
 | Alert-condition history | Not exposed by tested API | Validated |
@@ -209,7 +270,9 @@ firmware releases and installed hardware.
 - Disk error triggers fire when a cumulative counter increases.
 - Block-based capacity values are converted to bytes using the reported block
   size.
-- Response-time values are converted from microseconds to seconds.
+- Existing component response-time values are converted from microseconds to
+  seconds where required; the unified system-latency items remain in
+  microseconds.
 - Persistent hardware problems use the current component health or status.
 - New Warning, Error, and Critical event IDs generate supplemental edge
   notifications.
@@ -252,7 +315,8 @@ The template does not collect:
 
 - Full `audit-log`, because it was extremely large and truncated in testing
 - `workload`, which is mainly intended for tiering and capacity analysis
-- `metrics-list`, which is feature-discovery data rather than routine monitoring
+- `metrics-list` continuously; the 4006 system-latency collector queries the
+  required metrics directly
 - `fan-modules`, which returned HTTP 400 on the tested 4006; `show fans` supplies
   the required data
 - `host-phy-statistics`, which is SAS-host-specific and did not apply to the
@@ -261,10 +325,13 @@ The template does not collect:
 
 ## Validation
 
-Release 1.0.4 passed offline YAML, UUID, SAS-link policy, and enclosure-policy
-checks. See
-[`validation/v1.0.4.txt`](validation/v1.0.4.txt)
-for the validation summary and SHA-256 checksum.
+Release 1.0.6 passed offline YAML, Zabbix export hierarchy, UUID, graph
+reference, latency item, fallback prototype, and JavaScript syntax checks. See
+[`validation/v1.0.6.txt`](validation/v1.0.6.txt) for the validation summary and
+SHA-256 checksum.
+
+This is structural/offline validation. Importing the template into the target
+Zabbix 7.0+ instance remains the final semantic validation.
 
 ## Vendor documentation
 
@@ -273,6 +340,6 @@ for the validation summary and SHA-256 checksum.
 
 ## Version
 
-- Template version: `1.0.4`
+- Template version: `1.0.6`
 - Minimum Zabbix version: `7.0`
 - Export format: Zabbix `7.0`
