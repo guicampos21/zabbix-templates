@@ -12,7 +12,7 @@ in a supported Zabbix version.
 
 | Template | Category | Method | Minimum Zabbix | Version |
 |---|---|---|---:|---:|
-| [Seagate Exos X 4005/4006 Storage](templates/storage/seagate-exos-x-4005-4006/) | Storage | HTTP/JSON API | 7.0 | 1.0.6 |
+| [Seagate Exos X 4005/4006 Storage](templates/storage/seagate-exos-x-4005-4006/) | Storage | HTTP/JSON API | 7.0 | 1.0.7 |
 
 ## Repository layout
 
@@ -38,7 +38,7 @@ repository, but each release represents one template. Tags and release names
 include the template name to avoid ambiguity:
 
 ```text
-seagate-exos-x-4005-4006-v1.0.6
+seagate-exos-x-4005-4006-v1.0.7
 ```
 
 The importable YAML is attached to its GitHub Release with a versioned filename.

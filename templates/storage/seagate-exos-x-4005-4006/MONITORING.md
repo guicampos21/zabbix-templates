@@ -1,6 +1,6 @@
 # Monitoring inventory
 
-Complete inventory generated from `template.yaml` version 1.0.6.
+Complete inventory generated from `template.yaml` version 1.0.7.
 It includes fixed objects and low-level discovery (LLD) prototypes.
 
 > [!NOTE]

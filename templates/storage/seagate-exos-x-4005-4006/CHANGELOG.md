@@ -3,6 +3,24 @@
 All notable changes to the Seagate Exos X 4005/4006 Storage template are
 documented here.
 
+## 1.0.7
+
+- Changed the default inventory collection interval from `1h` to `30m`.
+- Changed 71 remaining `Discard unchanged with heartbeat` preprocessing
+  intervals from `1d` to `30m`.
+- Normalized all former one-day heartbeats across fixed items and LLD item
+  prototypes; the template now contains 76 30-minute heartbeats and no
+  one-day heartbeat.
+- Ensured dashboard-facing values such as the active management endpoint,
+  system-latency source, FDE security status, product identification, firmware,
+  controller and disk inventory, event summaries, and discovered component
+  attributes store a fresh unchanged sample at least every 30 minutes.
+- Added descriptions documenting the dashboard heartbeat behavior on the
+  management endpoint, product ID, FDE status, firmware bundle, and
+  system-latency source items.
+- Left existing one-hour heartbeats and the core, performance, availability,
+  and event polling intervals unchanged.
+
 ## 1.0.6
 
 - Added unified system read and write average latency items.

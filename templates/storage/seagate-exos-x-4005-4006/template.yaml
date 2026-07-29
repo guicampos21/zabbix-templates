@@ -17,7 +17,7 @@ zabbix_export:
       Structured Alerts are auto-enabled for the tested 4006 identity. The tested 4005/4865 is monitored through component state plus the common Event Log. For guaranteed delivery of every asynchronous event, also configure the array native syslog or SNMP event forwarding.
     vendor:
       name: SentrixIT
-      version: 1.0.6
+      version: 1.0.7
     groups:
     - name: Templates/SAN
     items:
@@ -727,12 +727,14 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.api.check
       tags:
       - tag: component
         value: inventory
+      description: Management endpoint currently used by the API collector. An unchanged value is stored at least every 30
+        minutes for dashboards.
     - uuid: a92e6bbf81ac4235936212c08c22927a
       name: API response time
       type: DEPENDENT
@@ -868,7 +870,7 @@ zabbix_export:
       value_type: CHAR
       trends: '0'
       description: Source used for the unified system latency items. Exos X 4006 uses the native Metrics Framework; 4005/4865
-        uses an I/O-weighted aggregate of host-port response times.
+        uses an I/O-weighted aggregate of host-port response times. An unchanged value is stored at least every 30 minutes.
       preprocessing:
       - type: JSONPATH
         parameters:
@@ -877,7 +879,7 @@ zabbix_export:
         error_handler_params: Host Port Weighted Aggregate
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.performance
       tags:
@@ -1593,7 +1595,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.system
       tags:
@@ -1613,12 +1615,13 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.system
       tags:
       - tag: component
         value: inventory
+      description: Storage product identifier. An unchanged value is stored at least every 30 minutes for dashboards.
     - uuid: 89519478171e4b20a5bc35d252dada6d
       name: Product brand
       type: DEPENDENT
@@ -1633,7 +1636,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.system
       tags:
@@ -1653,7 +1656,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.system
       tags:
@@ -1673,7 +1676,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.system
       tags:
@@ -1843,7 +1846,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.fde
       tags:
@@ -1859,6 +1862,7 @@ zabbix_export:
         tags:
         - tag: scope
           value: notice
+      description: Full Disk Encryption security status. An unchanged value is stored at least every 30 minutes for dashboards.
     - uuid: dba4aaca506b470d9eb554786aeca0c1
       name: NTP enabled
       type: DEPENDENT
@@ -1984,7 +1988,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.inventory
       tags:
@@ -2001,6 +2005,7 @@ zabbix_export:
         tags:
         - tag: scope
           value: notice
+      description: Storage firmware bundle version. An unchanged value is stored at least every 30 minutes for dashboards.
     - uuid: 681eff4286af4344a1ddd6b6e9cc0ed9
       name: Latest warning event ID
       type: DEPENDENT
@@ -2013,7 +2018,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.events
       tags:
@@ -2044,7 +2049,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.events
       tags:
@@ -2062,7 +2067,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.events
       tags:
@@ -2093,7 +2098,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.events
       tags:
@@ -2111,7 +2116,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.events
       tags:
@@ -2142,7 +2147,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       master_item:
         key: seagate.exos.get.events
       tags:
@@ -2160,7 +2165,7 @@ zabbix_export:
         error_handler: DISCARD_VALUE
       - type: DISCARD_UNCHANGED_HEARTBEAT
         parameters:
-        - 1d
+        - 30m
       valuemap:
         name: Yes/No
       master_item:
@@ -2398,7 +2403,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2418,7 +2423,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2438,7 +2443,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2458,7 +2463,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2478,7 +2483,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2498,7 +2503,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2557,7 +2562,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2576,7 +2581,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2594,7 +2599,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2612,7 +2617,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.controller.get["{#CONTROLLER.ID}"]
         tags:
@@ -2975,7 +2980,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -2995,7 +3000,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3015,7 +3020,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3046,7 +3051,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3066,7 +3071,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3086,7 +3091,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3106,7 +3111,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3126,7 +3131,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3146,7 +3151,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3166,7 +3171,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3195,7 +3200,7 @@ zabbix_export:
           - var o=JSON.parse(value); return Number(o['size-numeric']||o.blocks||0)*Number(o.blocksize||512);
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3213,7 +3218,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         valuemap:
           name: SMART state
         master_item:
@@ -3308,7 +3313,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3327,7 +3332,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.disk.get["{#DURABLE.ID}"]
         tags:
@@ -3768,7 +3773,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.diskgroup.get["{#NAME}"]
         tags:
@@ -3788,7 +3793,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.diskgroup.get["{#NAME}"]
         tags:
@@ -3808,7 +3813,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.diskgroup.get["{#NAME}"]
         tags:
@@ -3828,7 +3833,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.diskgroup.get["{#NAME}"]
         tags:
@@ -3848,7 +3853,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.diskgroup.get["{#NAME}"]
         tags:
@@ -3868,7 +3873,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.diskgroup.get["{#NAME}"]
         tags:
@@ -3972,7 +3977,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.diskgroup.get["{#NAME}"]
         tags:
@@ -3990,7 +3995,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.diskgroup.get["{#NAME}"]
         tags:
@@ -4653,7 +4658,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.volume.get["{#DURABLE.ID}"]
         tags:
@@ -4673,7 +4678,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.volume.get["{#DURABLE.ID}"]
         tags:
@@ -4693,7 +4698,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.volume.get["{#DURABLE.ID}"]
         tags:
@@ -4713,7 +4718,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.volume.get["{#DURABLE.ID}"]
         tags:
@@ -4733,7 +4738,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.volume.get["{#DURABLE.ID}"]
         tags:
@@ -4753,7 +4758,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.volume.get["{#DURABLE.ID}"]
         tags:
@@ -4773,7 +4778,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.volume.get["{#DURABLE.ID}"]
         tags:
@@ -5472,7 +5477,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.enclosure.get["{#DURABLE.ID}"]
         tags:
@@ -5492,7 +5497,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.enclosure.get["{#DURABLE.ID}"]
         tags:
@@ -5512,7 +5517,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.enclosure.get["{#DURABLE.ID}"]
         tags:
@@ -5532,7 +5537,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.enclosure.get["{#DURABLE.ID}"]
         tags:
@@ -5550,7 +5555,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.enclosure.get["{#DURABLE.ID}"]
         tags:
@@ -5568,7 +5573,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.enclosure.get["{#DURABLE.ID}"]
         tags:
@@ -5586,7 +5591,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.enclosure.get["{#DURABLE.ID}"]
         tags:
@@ -5694,7 +5699,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.fru.get["{#LLD.ID}"]
         tags:
@@ -5714,7 +5719,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.fru.get["{#LLD.ID}"]
         tags:
@@ -5734,7 +5739,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.fru.get["{#LLD.ID}"]
         tags:
@@ -5754,7 +5759,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.fru.get["{#LLD.ID}"]
         tags:
@@ -6024,7 +6029,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.psu.get["{#DURABLE.ID}"]
         tags:
@@ -6044,7 +6049,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.psu.get["{#DURABLE.ID}"]
         tags:
@@ -6064,7 +6069,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.psu.get["{#DURABLE.ID}"]
         tags:
@@ -6084,7 +6089,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.psu.get["{#DURABLE.ID}"]
         tags:
@@ -6197,7 +6202,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.sensor.get["{#DURABLE.ID}"]
         tags:
@@ -6459,7 +6464,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.port.get["{#DURABLE.ID}"]
         tags:
@@ -6479,7 +6484,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.port.get["{#DURABLE.ID}"]
         tags:
@@ -6499,7 +6504,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.port.get["{#DURABLE.ID}"]
         tags:
@@ -6519,7 +6524,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.port.get["{#DURABLE.ID}"]
         tags:
@@ -6539,7 +6544,7 @@ zabbix_export:
           error_handler: DISCARD_VALUE
         - type: DISCARD_UNCHANGED_HEARTBEAT
           parameters:
-          - 1d
+          - 30m
         master_item:
           key: seagate.exos.port.get["{#DURABLE.ID}"]
         tags:
@@ -7008,8 +7013,9 @@ zabbix_export:
       value: 1m
       description: Event and alert polling interval.
     - macro: '{$SEAGATE.INTERVAL.INVENTORY}'
-      value: 1h
-      description: Inventory polling interval.
+      value: 30m
+      description: Inventory polling interval. Default 30m so dashboard-facing inventory values such as product ID and firmware
+        bundle always have a recent sample.
     - macro: '{$SEAGATE.EVENTS.LAST}'
       value: '100'
       description: 'Number of recent events requested. Maximum enforced by script: 1000.'

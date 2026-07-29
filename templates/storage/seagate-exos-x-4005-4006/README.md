@@ -103,9 +103,27 @@ The default collection schedule is:
 | Core system and hardware state | 2 minutes |
 | Performance | 1 minute |
 | Events and alerts | 1 minute |
-| Inventory | 1 hour |
+| Inventory | 30 minutes |
 
 Intervals can be changed with the `{$SEAGATE.INTERVAL.*}` macros.
+
+## Dashboard data freshness
+
+Version 1.0.7 reduces stale-looking values in Grafana and NOC dashboards without
+storing every unchanged polling result.
+
+- The default `{$SEAGATE.INTERVAL.INVENTORY}` value is `30m`.
+- All preprocessing heartbeats that previously used `1d` now use `30m`.
+- The template contains 76 30-minute heartbeat steps and no remaining one-day
+  heartbeat.
+- Existing one-hour heartbeats remain unchanged.
+- Availability, core, performance, and event polling intervals remain
+  unchanged.
+
+This affects how frequently unchanged values are stored, not how frequently
+most operational data is collected. The shorter inventory master-item interval
+is necessary so dependent product and firmware values can store a sample every
+30 minutes.
 
 ## Monitored components
 
@@ -337,10 +355,10 @@ The template does not collect:
 
 ## Validation
 
-Release 1.0.6 passed offline YAML, Zabbix export hierarchy, UUID, graph
-reference, latency item, fallback prototype, and JavaScript syntax checks. See
-[`validation/v1.0.6.txt`](validation/v1.0.6.txt) for the validation summary and
-SHA-256 checksum.
+Release 1.0.7 passed offline YAML, JavaScript syntax, UUID format and uniqueness,
+heartbeat normalization, and explicit product-identification heartbeat checks.
+See [`validation/v1.0.7.txt`](validation/v1.0.7.txt) for the validation summary
+and SHA-256 checksum.
 
 This is structural/offline validation. Importing the template into the target
 Zabbix 7.0+ instance remains the final semantic validation.
@@ -352,6 +370,6 @@ Zabbix 7.0+ instance remains the final semantic validation.
 
 ## Version
 
-- Template version: `1.0.6`
+- Template version: `1.0.7`
 - Minimum Zabbix version: `7.0`
 - Export format: Zabbix `7.0`

@@ -1,0 +1,20 @@
+Seagate Exos Storage by HTTP - validation
+Template version: 1.0.7
+
+1d -> 30m changes applied in this correction: 71
+Total 30m heartbeat steps after validation: 76
+Remaining 1d heartbeat steps: 0
+
+Explicit screenshot item validation:
+  seagate.exos.system.product_brand: 30m
+  seagate.exos.system.product_id: 30m
+  seagate.exos.system.scsi_product_id: 30m
+
+YAML parse: PASS
+JavaScript syntax: PASS
+UUIDv4: PASS
+Duplicate UUIDs: 0
+SHA-256: 7ef3a0e45dcddac9fdad643298f6c29b8f93babd2f9ed9c5eaf1bc9a57444d65
+
+Offline validation: PASS
+Final semantic validation is import into the target Zabbix 7.0 instance.
