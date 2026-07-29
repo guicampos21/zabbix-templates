@@ -5,21 +5,20 @@
 Place each integration in:
 
 ```text
-templates/<category>/<template-name>/
+templates/<category>/template_<template_name>/<zabbix-version>/
 ```
 
-Use lowercase kebab-case directory names. A template directory should contain:
+Use the upstream-compatible `template_` prefix and characters accepted by the
+Zabbix community repository. Each version directory must contain:
 
 - `README.md` with scope, requirements, installation, configuration,
-  compatibility, and troubleshooting instructions
-- `MONITORING.md` generated from the YAML with the complete item, trigger, graph,
-  and low-level discovery inventory
-- `template.yaml` containing the importable Zabbix export
-- `CHANGELOG.md` with changes grouped by template version
-- `validation/` for checksums or validation reports, when available
+  macros, metrics, triggers, graphs, dashboards, release history, author,
+  compatibility, validation summary, and troubleshooting
+- exactly one importable YAML export named `template_<template_name>.yaml`
 
-Optional integration-specific assets such as scripts, MIBs, or media files
-should remain inside the same template directory.
+Do not add separate changelogs, monitoring inventories, or validation reports
+to a template directory. Consolidate that information in the version README so
+the version folder remains directly suitable for upstream submission.
 
 ## Catalog
 
@@ -53,9 +52,18 @@ Templates are versioned independently. Use release tags in this format:
 For example:
 
 ```text
-seagate-exos-x-4005-4006-v1.0.7
+seagate-exos-x-4005-4006-v1.1.0
 ```
 
 Each GitHub Release should represent one template, use the same template-scoped
 tag, summarize only that template's changes, and attach its importable YAML with
 a versioned filename.
+
+## Upstream submissions
+
+Prepare a stable copy under the matching category in a fork of
+`zabbix/community-templates`. The upstream version folder should contain only
+the YAML export and its `README.md`. Keep this repository as the source of truth
+and use the fork only to submit pull requests. All contributed files must be
+MIT-licensed and the YAML must import without errors into the declared Zabbix
+version.

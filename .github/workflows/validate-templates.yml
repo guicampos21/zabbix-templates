@@ -4,11 +4,13 @@ on:
   push:
     paths:
       - "templates/**"
+      - "scripts/generate_template_inventory.rb"
       - "scripts/validate_templates.rb"
       - ".github/workflows/validate-templates.yml"
   pull_request:
     paths:
       - "templates/**"
+      - "scripts/generate_template_inventory.rb"
       - "scripts/validate_templates.rb"
       - ".github/workflows/validate-templates.yml"
 

@@ -5,12 +5,15 @@ require "yaml"
 ROOT = File.expand_path("..", __dir__)
 TEMPLATE_PATH = File.join(
   ROOT,
-  "templates/storage/seagate-exos-x-4005-4006/template.yaml"
+  "templates/storage/template_seagate_exos_x_4005_4006/7.0/" \
+    "template_seagate_exos_x_4005_4006.yaml"
 )
 OUTPUT_PATH = File.join(
   ROOT,
-  "templates/storage/seagate-exos-x-4005-4006/MONITORING.md"
+  "templates/storage/template_seagate_exos_x_4005_4006/7.0/README.md"
 )
+BEGIN_MARKER = "<!-- BEGIN GENERATED MONITORING INVENTORY -->"
+END_MARKER = "<!-- END GENERATED MONITORING INVENTORY -->"
 
 def array(value)
   value.is_a?(Array) ? value : []
@@ -55,6 +58,11 @@ template = export.fetch("templates").first
 fixed_items = array(template["items"])
 discoveries = array(template["discovery_rules"])
 fixed_graphs = array(export["graphs"])
+dashboards = array(template["dashboards"])
+dashboard_pages = dashboards.sum { |dashboard| array(dashboard["pages"]).length }
+dashboard_widgets = dashboards.sum do |dashboard|
+  array(dashboard["pages"]).sum { |page| array(page["widgets"]).length }
+end
 
 fixed_triggers = fixed_items.flat_map do |item|
   array(item["triggers"]).map { |trigger| [trigger, item] }
@@ -70,9 +78,9 @@ prototype_graphs = discoveries.sum { |rule| array(rule["graph_prototypes"]).leng
 version = template.dig("vendor", "version")
 
 lines = []
-lines << "# Monitoring inventory"
+lines << "## Complete monitoring inventory"
 lines << ""
-lines << "Complete inventory generated from `template.yaml` version #{version}."
+lines << "Complete inventory generated from the Zabbix 7.0 YAML export, version #{version}."
 lines << "It includes fixed objects and low-level discovery (LLD) prototypes."
 lines << ""
 lines << "> [!NOTE]"
@@ -81,7 +89,7 @@ lines << "> they are part of the template, even when they primarily support coll
 lines << "> Trigger source identifies the item prototype that owns the trigger in the"
 lines << "> Zabbix export; an expression can reference additional items."
 lines << ""
-lines << "## Summary"
+lines << "### Inventory summary"
 lines << ""
 lines << "| Object | Count |"
 lines << "|---|---:|"
@@ -92,12 +100,15 @@ lines << "| Fixed triggers | #{fixed_triggers.length} |"
 lines << "| Trigger prototypes | #{prototype_triggers} |"
 lines << "| Fixed graphs | #{fixed_graphs.length} |"
 lines << "| Graph prototypes | #{prototype_graphs} |"
+lines << "| Template dashboards | #{dashboards.length} |"
+lines << "| Dashboard pages | #{dashboard_pages} |"
+lines << "| Dashboard widgets | #{dashboard_widgets} |"
 lines << ""
-lines << "## Fixed items"
+lines << "### Fixed items"
 
 fixed_items.group_by { |item| component(item) }.sort.each do |group, items|
   lines << ""
-  lines << "### #{escape(heading(group))}"
+  lines << "#### #{escape(heading(group))}"
   lines << ""
   lines << "| Item | Key | Type | Value type |"
   lines << "|---|---|---|---|"
@@ -108,7 +119,7 @@ fixed_items.group_by { |item| component(item) }.sort.each do |group, items|
 end
 
 lines << ""
-lines << "## Fixed triggers"
+lines << "### Fixed triggers"
 lines << ""
 lines << "| Trigger | Severity | Source item |"
 lines << "|---|---|---|"
@@ -118,7 +129,7 @@ fixed_triggers.each do |trigger, item|
 end
 
 lines << ""
-lines << "## Fixed graphs"
+lines << "### Fixed graphs"
 lines << ""
 lines << "| Graph | Item keys |"
 lines << "|---|---|"
@@ -128,7 +139,32 @@ fixed_graphs.each do |graph|
 end
 
 lines << ""
-lines << "## Low-level discovery"
+lines << "### Template dashboards"
+
+dashboards.each do |dashboard|
+  lines << ""
+  lines << "#### #{escape(dashboard['name'])}"
+  array(dashboard["pages"]).each do |page|
+    lines << ""
+    lines << "##### #{escape(page['name'])}"
+    lines << ""
+    lines << "| Widget | Type | Referenced object |"
+    lines << "|---|---|---|"
+    array(page["widgets"]).each do |widget|
+      references = array(widget["fields"]).filter_map do |field|
+        value = field["value"]
+        next unless value.is_a?(Hash)
+
+        value["name"] || value["key"]
+      end
+      lines << "| #{escape(widget['name'] || '(untitled)')} | " \
+               "#{code(widget['type'])} | #{escape(references.join('<br>'))} |"
+    end
+  end
+end
+
+lines << ""
+lines << "### Low-level discovery"
 
 discoveries.each do |rule|
   item_prototypes = array(rule["item_prototypes"])
@@ -138,7 +174,7 @@ discoveries.each do |rule|
   graph_prototypes = array(rule["graph_prototypes"])
 
   lines << ""
-  lines << "### #{escape(rule['name'])}"
+  lines << "#### #{escape(rule['name'])}"
   lines << ""
   lines << "- Discovery key: #{code(rule['key'])}"
   lines << "- Discovery type: #{code(item_type(rule))}"
@@ -146,7 +182,7 @@ discoveries.each do |rule|
   lines << "- Trigger prototypes: #{trigger_prototypes.length}"
   lines << "- Graph prototypes: #{graph_prototypes.length}"
   lines << ""
-  lines << "#### Item prototypes"
+  lines << "##### Item prototypes"
   lines << ""
   lines << "| Item prototype | Key | Type | Value type |"
   lines << "|---|---|---|---|"
@@ -156,7 +192,7 @@ discoveries.each do |rule|
   end
 
   lines << ""
-  lines << "#### Trigger prototypes"
+  lines << "##### Trigger prototypes"
   lines << ""
   if trigger_prototypes.empty?
     lines << "No trigger prototypes."
@@ -170,7 +206,7 @@ discoveries.each do |rule|
   end
 
   lines << ""
-  lines << "#### Graph prototypes"
+  lines << "##### Graph prototypes"
   lines << ""
   if graph_prototypes.empty?
     lines << "No graph prototypes."
@@ -184,11 +220,16 @@ discoveries.each do |rule|
   end
 end
 
-content = "#{lines.join("\n")}\n"
+generated = "#{lines.join("\n")}\n"
+source = File.read(OUTPUT_PATH)
+pattern = /#{Regexp.escape(BEGIN_MARKER)}.*?#{Regexp.escape(END_MARKER)}/m
+abort "#{OUTPUT_PATH}: generated inventory markers are missing" unless source.match?(pattern)
+
+replacement = "#{BEGIN_MARKER}\n#{generated}#{END_MARKER}"
+content = source.sub(pattern, replacement)
 
 if ARGV.include?("--check")
-  abort "#{OUTPUT_PATH} is not up to date" unless File.exist?(OUTPUT_PATH)
-  abort "#{OUTPUT_PATH} is not up to date" unless File.read(OUTPUT_PATH) == content
+  abort "#{OUTPUT_PATH} is not up to date" unless source == content
   puts "#{OUTPUT_PATH}: up to date"
 else
   File.write(OUTPUT_PATH, content)

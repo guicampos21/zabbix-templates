@@ -8,16 +8,19 @@ zabbix_export:
     template: Seagate Exos Storage by HTTP
     name: Seagate Exos Storage by HTTP
     description: |-
-      Universal HTTP/HTTPS monitoring template for Seagate Exos storage arrays validated against a Seagate 4005-family array reporting product ID 4865 and an Exos X 4006 array.
+      HTTP/HTTPS monitoring template for Seagate Exos X 4005 and 4006 storage arrays with Gallium or Indium controllers in 2U12, 2U24, and 5U84 enclosures. Validated against a Seagate 4005-family array reporting product ID 4865 and an Exos X 4006 array.
 
-      The template uses Zabbix Script master items, dependent items, low-level discovery, trigger prototypes, graph prototypes, macros, and value maps. Authentication uses SHA-256(username + "_" + password), obtains a sessionKey, and executes only read-only show commands.
+      The template uses Zabbix Script master items, dependent items, low-level discovery, trigger prototypes, graph prototypes, template dashboards, macros, and value maps. Authentication uses SHA-256(username + "_" + password), obtains a sessionKey, and executes only read-only show or query commands.
 
-      Configure {$SEAGATE.API.HOST}, {$SEAGATE.API.PORT}, {$SEAGATE.API.USERNAME}, and secret {$SEAGATE.API.PASSWORD}. {$SEAGATE.API.PORT} defaults to 443 and is used in every storage API URL. Override it at host level when the management API listens on a non-default TCP port. Optionally configure {$SEAGATE.API.HOST.SECONDARY}. Review context macros for intentionally unused host ports and intentionally write-through volumes.
+      Configure {$SEAGATE.API.HOST}, {$SEAGATE.API.PORT}, {$SEAGATE.API.USERNAME}, and secret {$SEAGATE.API.PASSWORD}. {$SEAGATE.API.PORT} defaults to 443. Optionally configure {$SEAGATE.API.HOST.SECONDARY} and {$SEAGATE.HTTP.PROXY}. Review context macros for intentionally unused host ports and intentionally write-through volumes.
 
       Structured Alerts are auto-enabled for the tested 4006 identity. The tested 4005/4865 is monitored through component state plus the common Event Log. For guaranteed delivery of every asynchronous event, also configure the array native syslog or SNMP event forwarding.
+
+      Author: Guilherme Campos (@guicampos21)
+      License: MIT
     vendor:
       name: SentrixIT
-      version: 1.0.7
+      version: 1.1.0
     groups:
     - name: Templates/SAN
     items:
@@ -47,6 +50,7 @@ zabbix_export:
         }
         function loginAt(p, host) {
             var r = new HttpRequest(), body, o, st, http;
+            if (p.http_proxy) r.setProxy(p.http_proxy);
             r.addHeader('datatype: json');
             body = r.get(baseUrl(p,host) + 'api/login/' + sha256(p.username + '_' + p.password));
             http = r.getStatus();
@@ -121,6 +125,8 @@ zabbix_export:
         value: '{$SEAGATE.EVENTS.LAST}'
       - name: host
         value: '{$SEAGATE.API.HOST}'
+      - name: http_proxy
+        value: '{$SEAGATE.HTTP.PROXY}'
       - name: password
         value: '{$SEAGATE.API.PASSWORD}'
       - name: port
@@ -160,6 +166,7 @@ zabbix_export:
         }
         function loginAt(p, host) {
             var r = new HttpRequest(), body, o, st, http;
+            if (p.http_proxy) r.setProxy(p.http_proxy);
             r.addHeader('datatype: json');
             body = r.get(baseUrl(p,host) + 'api/login/' + sha256(p.username + '_' + p.password));
             http = r.getStatus();
@@ -248,6 +255,8 @@ zabbix_export:
         value: '{$SEAGATE.EVENTS.LAST}'
       - name: host
         value: '{$SEAGATE.API.HOST}'
+      - name: http_proxy
+        value: '{$SEAGATE.HTTP.PROXY}'
       - name: password
         value: '{$SEAGATE.API.PASSWORD}'
       - name: port
@@ -289,6 +298,7 @@ zabbix_export:
         }
         function loginAt(p, host) {
             var r = new HttpRequest(), body, o, st, http;
+            if (p.http_proxy) r.setProxy(p.http_proxy);
             r.addHeader('datatype: json');
             body = r.get(baseUrl(p,host) + 'api/login/' + sha256(p.username + '_' + p.password));
             http = r.getStatus();
@@ -411,6 +421,8 @@ zabbix_export:
         value: '{$SEAGATE.EVENTS.LAST}'
       - name: host
         value: '{$SEAGATE.API.HOST}'
+      - name: http_proxy
+        value: '{$SEAGATE.HTTP.PROXY}'
       - name: password
         value: '{$SEAGATE.API.PASSWORD}'
       - name: port
@@ -450,6 +462,7 @@ zabbix_export:
         }
         function loginAt(p, host) {
             var r = new HttpRequest(), body, o, st, http;
+            if (p.http_proxy) r.setProxy(p.http_proxy);
             r.addHeader('datatype: json');
             body = r.get(baseUrl(p,host) + 'api/login/' + sha256(p.username + '_' + p.password));
             http = r.getStatus();
@@ -523,6 +536,8 @@ zabbix_export:
         value: '{$SEAGATE.EVENTS.LAST}'
       - name: host
         value: '{$SEAGATE.API.HOST}'
+      - name: http_proxy
+        value: '{$SEAGATE.HTTP.PROXY}'
       - name: password
         value: '{$SEAGATE.API.PASSWORD}'
       - name: port
@@ -562,6 +577,7 @@ zabbix_export:
         }
         function loginAt(p, host) {
             var r = new HttpRequest(), body, o, st, http;
+            if (p.http_proxy) r.setProxy(p.http_proxy);
             r.addHeader('datatype: json');
             body = r.get(baseUrl(p,host) + 'api/login/' + sha256(p.username + '_' + p.password));
             http = r.getStatus();
@@ -639,6 +655,8 @@ zabbix_export:
         value: '{$SEAGATE.EVENTS.LAST}'
       - name: host
         value: '{$SEAGATE.API.HOST}'
+      - name: http_proxy
+        value: '{$SEAGATE.HTTP.PROXY}'
       - name: password
         value: '{$SEAGATE.API.PASSWORD}'
       - name: port
@@ -1735,7 +1753,7 @@ zabbix_export:
       - uuid: 7f2f35fa3ec744f38fa9d70dc7cb601c
         expression: last(/Seagate Exos Storage by HTTP/seagate.exos.system.health)=1
         name: 'Seagate Exos Storage: System health is degraded'
-        priority: HIGH
+        priority: AVERAGE
         description: The storage reports degraded system health.
         tags:
         - tag: scope
@@ -1743,7 +1761,7 @@ zabbix_export:
       - uuid: 10c6e1f9aead46eb8eed4647683961b5
         expression: last(/Seagate Exos Storage by HTTP/seagate.exos.system.health)=2
         name: 'Seagate Exos Storage: System health is in fault state'
-        priority: DISASTER
+        priority: HIGH
         description: The storage reports a system fault.
         tags:
         - tag: scope
@@ -2127,7 +2145,7 @@ zabbix_export:
         expression: last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_critical.id,#1)<>last(/Seagate Exos Storage
           by HTTP/seagate.exos.event.latest_critical.id,#2) and length(last(/Seagate Exos Storage by HTTP/seagate.exos.event.latest_critical.message))>0
         name: 'Seagate Exos Storage: New critical event detected'
-        priority: DISASTER
+        priority: HIGH
         event_name: 'Seagate Exos Storage: New critical event {ITEM.LASTVALUE1}: {ITEM.LASTVALUE2}'
         description: A new Seagate critical event ID was observed. This is supplemental to persistent component-state triggers.
         tags:
@@ -2265,7 +2283,7 @@ zabbix_export:
         expression: last(/Seagate Exos Storage by HTTP/seagate.exos.alerts.active_critical)>0 and length(last(/Seagate Exos
           Storage by HTTP/seagate.exos.alerts.summary))>=0
         name: 'Seagate Exos Storage: Active critical alert conditions'
-        priority: DISASTER
+        priority: HIGH
         event_name: 'Seagate Exos Storage: {ITEM.LASTVALUE1} active critical alert(s): {ITEM.LASTVALUE2}'
         description: One or more unresolved structured alert conditions are active on a supported Exos X system.
         tags:
@@ -2917,7 +2935,7 @@ zabbix_export:
         - uuid: bada6392093b42d0b7f6f13c53355821
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.health["{#DURABLE.ID}"])=1
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] health is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: The component reports degraded health.
           tags:
           - tag: scope
@@ -2925,7 +2943,7 @@ zabbix_export:
         - uuid: 18dcaf6db41149178f4b475447b094e8
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.disk.health["{#DURABLE.ID}"])=2
           name: 'Seagate Exos Storage: Disk [{#LOCATION}] health is in fault state'
-          priority: DISASTER
+          priority: HIGH
           description: The component reports a fault.
           tags:
           - tag: scope
@@ -3697,7 +3715,7 @@ zabbix_export:
         - uuid: e2deb3087c834290b861f70e04a8d670
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.health["{#NAME}"])=1
           name: 'Seagate Exos Storage: Disk group [{#NAME}] health is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: The component reports degraded health.
           tags:
           - tag: scope
@@ -3705,7 +3723,7 @@ zabbix_export:
         - uuid: 066bd99aab964ffaa41bddaeb102a335
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.health["{#NAME}"])=2
           name: 'Seagate Exos Storage: Disk group [{#NAME}] health is in fault state'
-          priority: DISASTER
+          priority: HIGH
           description: The component reports a fault.
           tags:
           - tag: scope
@@ -3743,7 +3761,7 @@ zabbix_export:
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=1 or last(/Seagate Exos
             Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=8 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=9
           name: 'Seagate Exos Storage: Disk group [{#NAME}] is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: Disk group is fault-tolerant but degraded, missing, or damaged.
           tags:
           - tag: scope
@@ -3754,7 +3772,7 @@ zabbix_export:
             or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=5 or last(/Seagate Exos Storage
             by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=6 or last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.status["{#NAME}"])=7
           name: 'Seagate Exos Storage: Disk group [{#NAME}] is critical or offline'
-          priority: DISASTER
+          priority: HIGH
           description: Disk group is critical, offline, quarantined, or stopped.
           tags:
           - tag: scope
@@ -4099,7 +4117,7 @@ zabbix_export:
         - uuid: 2906b2f3a4e14a408d6bb4aa98ef9bfc
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.diskgroup.used_pct["{#NAME}"])>{$SEAGATE.DISKGROUP.USED.CRIT}
           name: 'Seagate Exos Storage: Disk group [{#NAME}] utilization is critical'
-          priority: DISASTER
+          priority: HIGH
           description: Disk group utilization exceeded critical threshold.
           tags:
           - tag: scope
@@ -4297,7 +4315,7 @@ zabbix_export:
         - uuid: 2c550270efad47fd9a1650655a757474
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.pool.health["{#NAME}"])=1
           name: 'Seagate Exos Storage: Pool [{#NAME}] health is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: The component reports degraded health.
           tags:
           - tag: scope
@@ -4305,7 +4323,7 @@ zabbix_export:
         - uuid: 96158501b29e4c749eed8325d3727b65
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.pool.health["{#NAME}"])=2
           name: 'Seagate Exos Storage: Pool [{#NAME}] health is in fault state'
-          priority: DISASTER
+          priority: HIGH
           description: The component reports a fault.
           tags:
           - tag: scope
@@ -4398,7 +4416,7 @@ zabbix_export:
         - uuid: 829d1ebb881d451d9155b69364c069fa
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.pool.used_pct["{#NAME}"])>{$SEAGATE.POOL.USED.CRIT}
           name: 'Seagate Exos Storage: Pool [{#NAME}] utilization is critical'
-          priority: DISASTER
+          priority: HIGH
           description: Pool utilization exceeded critical threshold.
           tags:
           - tag: scope
@@ -5413,7 +5431,7 @@ zabbix_export:
         - uuid: e2e700c037e5477d81d21443281c8626
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.enclosure.health["{#DURABLE.ID}"])=1
           name: 'Seagate Exos Storage: Enclosure [{#ENCLOSURE.ID}] health is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: The component reports degraded health.
           tags:
           - tag: scope
@@ -5421,7 +5439,7 @@ zabbix_export:
         - uuid: 237df4b033a345a6b6f2cdb8674c0c14
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.enclosure.health["{#DURABLE.ID}"])=2
           name: 'Seagate Exos Storage: Enclosure [{#ENCLOSURE.ID}] health is in fault state'
-          priority: DISASTER
+          priority: HIGH
           description: The component reports a fault.
           tags:
           - tag: scope
@@ -5824,7 +5842,7 @@ zabbix_export:
         - uuid: 0b98b20d574f4c85af688225be57dcc9
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.fan.health["{#DURABLE.ID}"])=1
           name: 'Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] health is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: The component reports degraded health.
           tags:
           - tag: scope
@@ -5832,7 +5850,7 @@ zabbix_export:
         - uuid: 359afb8d28324f7aa7a92956c48c0da1
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.fan.health["{#DURABLE.ID}"])=2
           name: 'Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] health is in fault state'
-          priority: DISASTER
+          priority: HIGH
           description: The component reports a fault.
           tags:
           - tag: scope
@@ -5965,7 +5983,7 @@ zabbix_export:
         - uuid: bf4ac4e8337f404fa866905d369112ae
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.psu.health["{#DURABLE.ID}"])=1
           name: 'Seagate Exos Storage: Power supply [{#LOCATION}] health is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: The component reports degraded health.
           tags:
           - tag: scope
@@ -5973,7 +5991,7 @@ zabbix_export:
         - uuid: 0c0e46b751a2407ca4c08f32149edc27
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.psu.health["{#DURABLE.ID}"])=2
           name: 'Seagate Exos Storage: Power supply [{#LOCATION}] health is in fault state'
-          priority: DISASTER
+          priority: HIGH
           description: The component reports a fault.
           tags:
           - tag: scope
@@ -6269,7 +6287,7 @@ zabbix_export:
         - uuid: 2c87d857b92c47ffa0ff3f75a1ad19f5
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.saslink.health["{#DURABLE.ID}"])=1
           name: 'Seagate Exos Storage: SAS link [{#NAME}] health is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: The component reports degraded health.
           tags:
           - tag: scope
@@ -6277,7 +6295,7 @@ zabbix_export:
         - uuid: c03898bc1e0a4448bb707a49913dad9c
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.saslink.health["{#DURABLE.ID}"])=2
           name: 'Seagate Exos Storage: SAS link [{#NAME}] health is in fault state'
-          priority: DISASTER
+          priority: HIGH
           description: The component reports a fault.
           tags:
           - tag: scope
@@ -6400,7 +6418,7 @@ zabbix_export:
         - uuid: 33b536bf968b46cfa60a0765c192ed04
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.port.health["{#DURABLE.ID}"])=1
           name: 'Seagate Exos Storage: Host port [{#PORT.ID}] health is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: The component reports degraded health.
           tags:
           - tag: scope
@@ -6921,7 +6939,7 @@ zabbix_export:
         - uuid: 03760b169aa44a13a6b3ad36ea89a73a
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.replication.health["{#LLD.ID}"])=1
           name: 'Seagate Exos Storage: Replication set [{#NAME}] health is degraded'
-          priority: HIGH
+          priority: AVERAGE
           description: The component reports degraded health.
           tags:
           - tag: scope
@@ -6929,7 +6947,7 @@ zabbix_export:
         - uuid: 2af682f7662a4859a5dda11be4349ebf
           expression: last(/Seagate Exos Storage by HTTP/seagate.exos.replication.health["{#LLD.ID}"])=2
           name: 'Seagate Exos Storage: Replication set [{#NAME}] health is in fault state'
-          priority: DISASTER
+          priority: HIGH
           description: The component reports a fault.
           tags:
           - tag: scope
@@ -6973,9 +6991,9 @@ zabbix_export:
         path: $['serial-number']
     tags:
     - tag: class
-      value: hardware
-    - tag: target
       value: storage
+    - tag: target
+      value: seagate-exos
     - tag: vendor
       value: seagate
     macros:
@@ -6992,11 +7010,14 @@ zabbix_export:
       value: https
       description: 'API scheme: https or http.'
     - macro: '{$SEAGATE.API.USERNAME}'
-      value: zabbix
-      description: Read-only storage API username.
+      value: zbx_monitor
+      description: Dedicated storage API username with Monitor/read-only and Web/API access.
     - macro: '{$SEAGATE.API.PASSWORD}'
       type: SECRET_TEXT
       description: Read-only storage API password. Configure at host level.
+    - macro: '{$SEAGATE.HTTP.PROXY}'
+      value: ''
+      description: 'Optional HTTP proxy used by all Script master items. Format example: http://proxy.example:8080.'
     - macro: '{$SEAGATE.DATA.TIMEOUT}'
       value: 60s
       description: Timeout for Script master items.
@@ -7077,6 +7098,236 @@ zabbix_export:
     - macro: '{$SEAGATE.TIER.USED.CRIT}'
       value: '95'
       description: Tier used-space critical threshold in percent.
+    dashboards:
+    - uuid: 439da5017030424db53e1910db62e9f7
+      name: Overview
+      pages:
+      - name: Overview
+        widgets:
+        - type: item
+          name: API availability
+          width: '12'
+          height: '3'
+          fields:
+          - type: ITEM
+            name: itemid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              key: seagate.exos.api.available
+          - type: STRING
+            name: reference
+            value: AAAAA
+        - type: item
+          name: System health
+          x: '12'
+          width: '12'
+          height: '3'
+          fields:
+          - type: ITEM
+            name: itemid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              key: seagate.exos.system.health
+          - type: STRING
+            name: reference
+            value: AAAAB
+        - type: item
+          name: Product
+          x: '24'
+          width: '12'
+          height: '3'
+          fields:
+          - type: ITEM
+            name: itemid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              key: seagate.exos.system.product_id
+          - type: STRING
+            name: reference
+            value: AAAAC
+        - type: item
+          name: Firmware bundle
+          x: '36'
+          width: '18'
+          height: '3'
+          fields:
+          - type: ITEM
+            name: itemid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              key: seagate.exos.system.bundle_version
+          - type: STRING
+            name: reference
+            value: AAAAD
+        - type: item
+          name: System latency source
+          x: '54'
+          width: '18'
+          height: '3'
+          fields:
+          - type: ITEM
+            name: itemid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              key: seagate.exos.system.latency.source
+          - type: STRING
+            name: reference
+            value: AAAAE
+        - type: graph
+          name: Average system latency
+          'y': '3'
+          width: '36'
+          height: '5'
+          fields:
+          - type: GRAPH
+            name: graphid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              name: System latency
+          - type: STRING
+            name: reference
+            value: AAAAF
+        - type: graph
+          name: Maximum system latency
+          x: '36'
+          'y': '3'
+          width: '36'
+          height: '5'
+          fields:
+          - type: GRAPH
+            name: graphid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              name: System maximum latency (4006 native)
+          - type: STRING
+            name: reference
+            value: AAAAG
+        - type: problems
+          name: Active problems
+          'y': '8'
+          width: '72'
+          height: '6'
+          fields:
+          - type: STRING
+            name: reference
+            value: AAAAH
+          - type: INTEGER
+            name: show
+            value: '3'
+          - type: INTEGER
+            name: show_opdata
+            value: '2'
+          - type: INTEGER
+            name: show_tags
+            value: '1'
+          - type: STRING
+            name: tag_priority
+            value: scope
+      - name: Components
+        widgets:
+        - type: graphprototype
+          name: Controller performance
+          width: '36'
+          height: '5'
+          fields:
+          - type: INTEGER
+            name: columns
+            value: '1'
+          - type: GRAPH_PROTOTYPE
+            name: graphid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              name: 'Controller [{#CONTROLLER.ID}]: Performance'
+          - type: STRING
+            name: reference
+            value: BAAAA
+        - type: graphprototype
+          name: Disk performance
+          x: '36'
+          width: '36'
+          height: '5'
+          fields:
+          - type: INTEGER
+            name: columns
+            value: '1'
+          - type: GRAPH_PROTOTYPE
+            name: graphid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              name: 'Disk [{#LOCATION}]: Performance'
+          - type: STRING
+            name: reference
+            value: BAAAB
+        - type: graphprototype
+          name: Pool performance
+          'y': '5'
+          width: '36'
+          height: '5'
+          fields:
+          - type: INTEGER
+            name: columns
+            value: '1'
+          - type: GRAPH_PROTOTYPE
+            name: graphid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              name: 'Pool [{#NAME}]: Performance'
+          - type: STRING
+            name: reference
+            value: BAAAC
+        - type: graphprototype
+          name: Volume performance
+          x: '36'
+          'y': '5'
+          width: '36'
+          height: '5'
+          fields:
+          - type: INTEGER
+            name: columns
+            value: '1'
+          - type: GRAPH_PROTOTYPE
+            name: graphid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              name: 'Volume [{#NAME}]: Performance'
+          - type: STRING
+            name: reference
+            value: BAAAD
+        - type: graphprototype
+          name: Host port performance
+          'y': '10'
+          width: '36'
+          height: '5'
+          fields:
+          - type: INTEGER
+            name: columns
+            value: '1'
+          - type: GRAPH_PROTOTYPE
+            name: graphid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              name: 'Host port [{#PORT.ID}]: Performance'
+          - type: STRING
+            name: reference
+            value: BAAAE
+        - type: graphprototype
+          name: Disk temperature
+          x: '36'
+          'y': '10'
+          width: '36'
+          height: '5'
+          fields:
+          - type: INTEGER
+            name: columns
+            value: '1'
+          - type: GRAPH_PROTOTYPE
+            name: graphid.0
+            value:
+              host: Seagate Exos Storage by HTTP
+              name: 'Disk [{#LOCATION}]: Temperature'
+          - type: STRING
+            name: reference
+            value: BAAAF
     valuemaps:
     - uuid: 1791af26432b4aa898933b1fdeebd835
       name: Yes/No

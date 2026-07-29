@@ -1,6 +1,449 @@
-# Monitoring inventory
+# Zabbix Template for Seagate Exos X 4005/4006 Storage
 
-Complete inventory generated from `template.yaml` version 1.0.7.
+Zabbix 7.0+ template for monitoring Seagate Exos storage systems through the
+native JSON management API.
+
+The template is designed for Seagate Exos X 4005/4006 systems with Gallium or
+Indium controller modules and the following enclosure formats:
+
+- 2U12
+- 2U24
+- 5U84
+
+The template was validated offline with real API responses from:
+
+- Seagate Exos X 4005-family storage reporting product ID `4865`
+- Seagate Exos X 4006
+
+It uses native Zabbix features only: Script items, dependent items, low-level
+discovery, trigger prototypes, graph prototypes, value maps, and host macros.
+No external scripts or agents are required.
+
+## Requirements
+
+- Zabbix 7.0 or newer
+- Network access from the Zabbix server or proxy to the storage management
+  controller over HTTP or HTTPS
+- A Seagate Exos account with Monitor/read-only permissions and Web/API access
+- The native Seagate JSON API enabled on the storage system
+
+> [!IMPORTANT]
+> Import and test the template on a non-critical host first. Although it was
+> validated against real API captures, a live import and several collection
+> cycles are the final compatibility test for your firmware and configuration.
+
+## Installation
+
+1. Download
+   [`template_seagate_exos_x_4005_4006.yaml`](template_seagate_exos_x_4005_4006.yaml).
+2. In Zabbix, open **Data collection > Templates**.
+3. Select **Import**, choose the downloaded YAML file, and complete the import.
+4. Create or select the host that represents the storage array.
+5. Link the **Seagate Exos Storage by HTTP** template to the host.
+6. Open the host's **Macros** tab and configure the required values:
+
+   | Macro | Example | Description |
+   |---|---|---|
+   | `{$SEAGATE.API.HOST}` | `192.0.2.10` | Primary controller management IP address or hostname |
+   | `{$SEAGATE.API.USERNAME}` | `zbx_monitor` | Dedicated Monitor/read-only API user |
+   | `{$SEAGATE.API.PASSWORD}` | — | API password, stored as a secret-text macro |
+
+7. If necessary, override the connection defaults:
+
+   | Macro | Default | Description |
+   |---|---:|---|
+   | `{$SEAGATE.API.SCHEME}` | `https` | API scheme: `https` or `http` |
+   | `{$SEAGATE.API.PORT}` | `443` | Management API TCP port |
+   | `{$SEAGATE.API.HOST.SECONDARY}` | empty | Optional partner-controller management address |
+   | `{$SEAGATE.HTTP.PROXY}` | empty | Optional HTTP proxy, for example `http://proxy.example:8080` |
+
+The host does not require an Agent, SNMP, JMX, or IPMI interface for this
+template. Collection is performed by Zabbix Script items from the Zabbix server
+or the proxy monitoring the host.
+
+## Storage-side preparation
+
+Create a dedicated account in the Seagate management interface with the
+Monitor/read-only role, name it `zbx_monitor` when practical, and permit Web/API
+access. Confirm that the Zabbix server or proxy can reach the selected
+management address and port.
+
+The template authenticates with the Seagate API using
+`SHA-256(username + "_" + password)`, obtains a session key, runs read-only
+`show` commands, and logs out. Credentials are supplied through Zabbix macros;
+the password macro is defined as `SECRET_TEXT`.
+
+For dual-controller systems, set `{$SEAGATE.API.HOST.SECONDARY}` to enable
+login failover. The template tries the secondary address when the primary
+address cannot be used.
+
+## First-run verification
+
+Allow two or three polling cycles after linking the template, then check
+**Monitoring > Latest data** for the host.
+
+Verify the following:
+
+1. The `API availability raw` item is supported and reports an available API.
+2. The five Script master items collect data without method errors:
+   - API check
+   - Core data
+   - Performance data
+   - Events and alerts
+   - Inventory data
+3. Low-level discovery creates the expected controllers, disks, pools, volumes,
+   ports, enclosures, and other installed components.
+4. Unsupported firmware-specific fields do not affect required monitoring.
+5. Trigger thresholds and port policies match the storage configuration.
+6. `System latency: Source` identifies either the native 4006 metrics or the
+   4005/4865 host-port weighted fallback.
+
+The default collection schedule is:
+
+| Data set | Interval |
+|---|---:|
+| API availability | 1 minute |
+| Core system and hardware state | 2 minutes |
+| Performance | 1 minute |
+| Events and alerts | 1 minute |
+| Inventory | 30 minutes |
+
+Intervals can be changed with the `{$SEAGATE.INTERVAL.*}` macros.
+
+## Dashboard data freshness
+
+Version 1.0.7 reduces stale-looking values in Grafana and NOC dashboards without
+storing every unchanged polling result.
+
+- The default `{$SEAGATE.INTERVAL.INVENTORY}` value is `30m`.
+- All preprocessing heartbeats that previously used `1d` now use `30m`.
+- The template contains 76 30-minute heartbeat steps and no remaining one-day
+  heartbeat.
+- Existing one-hour heartbeats remain unchanged.
+- Availability, core, performance, and event polling intervals remain
+  unchanged.
+
+This affects how frequently unchanged values are stored, not how frequently
+most operational data is collected. The shorter inventory master-item interval
+is necessary so dependent product and firmware values can store a sample every
+30 minutes.
+
+## Monitored components
+
+Low-level discovery covers:
+
+- Controllers
+- Physical disks
+- Disk groups
+- Pools
+- Volumes
+- Storage tiers
+- Enclosures
+- Field-replaceable units (FRUs)
+- Fans and power supplies
+- Sensors
+- SAS links
+- FC, iSCSI, and SAS host ports
+- Replication sets
+
+The template monitors health, capacity, utilization, performance, firmware,
+system read/write latency, error counters, the common event log, and structured
+active alerts when the storage model supports them.
+
+The [complete monitoring inventory](#complete-monitoring-inventory) below lists
+every fixed item, discovery rule, item prototype, fixed trigger, trigger
+prototype, fixed graph, graph prototype, and dashboard widget, including Zabbix
+keys and severities.
+
+| Zabbix object | Fixed | LLD/prototype |
+|---|---:|---:|
+| Items | 78 | 192 |
+| Discovery rules | — | 14 |
+| Triggers | 24 | 80 |
+| Graphs | 2 | 19 |
+| Template dashboards | 1 dashboard / 2 pages / 14 widgets | — |
+
+## Template dashboard
+
+The **Overview** template dashboard is designed for the Zabbix 72-column
+Full HD grid and contains two pages:
+
+- **Overview**: API availability, system health, product, firmware,
+  latency-source values, average and maximum system-latency graphs, and active
+  problems
+- **Components**: controller, disk, pool, volume, host-port, and disk
+  temperature graph prototypes
+
+## Important configuration macros
+
+| Macro | Default | Purpose |
+|---|---:|---|
+| `{$SEAGATE.ALERTS.MODE}` | `auto` | Structured Alerts API mode: `auto`, `enabled`, or `disabled` |
+| `{$SEAGATE.EVENTS.LAST}` | `100` | Number of recent events requested; maximum 1000 |
+| `{$SEAGATE.DATA.TIMEOUT}` | `60s` | Script master-item timeout |
+| `{$SEAGATE.HTTP.PROXY}` | empty | Optional proxy applied to all HTTP API requests |
+| `{$SEAGATE.ENCLOSURE.EXPECTED}` | `1` | Expected total enclosure count, including the controller enclosure |
+| `{$SEAGATE.PORT.DOWN.ENABLED}` | `1` | Enable host-port and SFP alerts |
+| `{$SEAGATE.VOLUME.WRITEBACK.REQUIRED}` | `1` | Require write-back policy |
+| `{$SEAGATE.REDUNDANCY.REQUIRED}` | `1` | Alert when the system is not redundant |
+| `{$SEAGATE.NTP.REQUIRED}` | `0` | Require NTP when set to `1` |
+| `{$SEAGATE.CONTROLLER.CPU.WARN}` | `90` | Controller CPU warning threshold, in percent |
+| `{$SEAGATE.DISK.TEMP.WARN}` | `50` | Disk temperature warning threshold, in degrees Celsius |
+| `{$SEAGATE.DISK.TEMP.CRIT}` | `60` | Disk temperature critical threshold, in degrees Celsius |
+| `{$SEAGATE.SSD.LIFE.WARN}` | `10` | SSD remaining-life warning threshold, in percent |
+
+Capacity thresholds for disk groups, pools, and tiers are also exposed as
+template macros and can be overridden at host level.
+
+### Excluding intentionally unused ports
+
+Port and SFP alerts support macro contexts. To suppress down alerts for an
+intentionally unused port, create a host-level context macro such as:
+
+```text
+{$SEAGATE.PORT.DOWN.ENABLED:"A3"} = 0
+```
+
+Use the discovered port name shown in Zabbix as the context.
+
+### Enclosure and SAS expansion-port policy
+
+Set `{$SEAGATE.ENCLOSURE.EXPECTED}` to the total number of enclosures that
+should be visible:
+
+- `1`: controller enclosure only
+- `2`: controller enclosure and one expansion enclosure
+- `3`: controller enclosure and two expansion enclosures
+
+The template raises a High-severity problem when the discovered enclosure count
+is below this value.
+
+An external `Expansion Port Universal` SAS link is not considered failed only
+because its state is `Disconnected`; that state is valid for an unused expansion
+port or the last port in an enclosure chain. Health monitoring remains enabled
+for all SAS links, while abnormal internal or non-expansion SAS links continue
+to generate problems.
+
+## System latency
+
+Version 1.0.6 provides one unified system-latency view while selecting the
+collection method supported by the storage model.
+
+### Exos X 4006 native metrics
+
+On Exos X 4006, the template queries these read-only Metrics Framework values:
+
+- `system.read-avg-response-time`
+- `system.write-avg-response-time`
+- `system.read-max-response-time`
+- `system.write-max-response-time`
+
+The collector only runs `query metrics`; it does not call `start metrics` or
+`stop metrics`. Bare `N/A` tokens occasionally returned by the API are sanitized
+before the response is parsed as JSON.
+
+### 4005/4865 fallback
+
+The tested 4005/4865 API does not expose the Metrics Framework. For that system,
+the template derives the host-facing average read and write latency from
+`show host-port-statistics`.
+
+It derives the read and write I/O rate of each host port from its cumulative
+counters and calculates an I/O-weighted aggregate:
+
+```text
+sum(port_latency_us × port_IO_rate) / sum(port_IO_rate)
+```
+
+Comparison with native 4006 metrics over clean, aligned intervals produced:
+
+| Measurement | Read | Write |
+|---|---:|---:|
+| Mean absolute error | approximately 3.05% | approximately 18.16% |
+| Pearson correlation | approximately 0.9201 | approximately 0.9605 |
+
+`System latency: Source` shows which method currently feeds the unified items.
+
+### Items and graphs
+
+The system-latency items are:
+
+- `System: Read average response time`
+- `System: Write average response time`
+- `System: Read maximum response time` — native 4006 only
+- `System: Write maximum response time` — native 4006 only
+- `System latency: Source`
+
+All system-latency values are stored and displayed in microseconds. The template
+includes the `System latency` graph for average read/write time and the
+`System maximum latency (4006 native)` graph for native maximum values.
+
+Pool, disk-group, and host-port latency graphs remain available because they
+represent different layers of the storage I/O path.
+
+## Hardware and model compatibility
+
+| Scope | Supported target |
+|---|---|
+| Product family | Seagate Exos X |
+| Management/controller models | 4005 and 4006 |
+| Controller platforms | Gallium and Indium |
+| Enclosure formats | 2U12, 2U24, and 5U84 |
+
+| Feature | 4005/4865 | Exos X 4006 |
+|---|:---:|:---:|
+| Core system and hardware state | Validated | Validated |
+| Controllers and performance | Validated | Validated |
+| Disks and predictive counters | Validated | Validated |
+| Disk groups, pools, volumes, and tiers | Validated | Validated |
+| Enclosures, FRUs, fans, PSUs, and sensors | Validated | Validated |
+| SAS link and expander health | Validated | Validated |
+| Host ports and SFP data | Validated | Validated |
+| Unified system average latency | Weighted fallback | Native metrics |
+| System maximum latency | Not exposed by tested API | Native metrics |
+| Common Event Log | Validated | Validated |
+| Structured active Alerts | Not exposed by tested API | Validated |
+| Alert-condition history | Not exposed by tested API | Validated |
+| Replication commands | Validated; no active set available | Validated; no active set available |
+
+The template discovers components dynamically and addresses API fields by name,
+which makes it tolerant of model differences. Results can still vary with
+firmware releases and installed hardware.
+
+## Alert behavior
+
+- Controller and system firmware changes generate Information events.
+- Disk error triggers fire when a cumulative counter increases.
+- Block-based capacity values are converted to bytes using the reported block
+  size.
+- Existing component response-time values are converted from microseconds to
+  seconds where required; the unified system-latency items remain in
+  microseconds.
+- Persistent hardware problems use the current component health or status.
+- New Warning, Error, and Critical event IDs generate supplemental edge
+  notifications.
+- Structured active-alert counters are used on supported Exos X 4006 systems.
+
+Native syslog or SNMP event forwarding is still recommended when guaranteed
+delivery of every asynchronous storage event is required.
+
+## Troubleshooting
+
+### Authentication fails
+
+- Confirm the username and password at host macro level.
+- Confirm the account has Monitor/read-only and Web/API access.
+- Check that no unresolved macro is overriding the template value.
+- Test both controller addresses if a secondary endpoint is configured.
+
+The login endpoint is validated through a successful HTTP status,
+`response-type: Success`, and a non-empty session key. Unlike normal `show`
+commands, login does not need to return `return-code: 0`.
+
+### Script items are unsupported
+
+- Confirm that the Zabbix server or assigned proxy can resolve and reach the
+  controller address.
+- Check `{$SEAGATE.API.SCHEME}` and `{$SEAGATE.API.PORT}`.
+- Review the master item's error message and the API method-error items.
+- Increase `{$SEAGATE.DATA.TIMEOUT}` if the array answers slowly.
+
+### Expected hardware is not discovered
+
+- Wait for the relevant discovery interval.
+- Check the corresponding Script master item for API errors.
+- Confirm that the component is visible to the read-only storage account.
+- Compare the storage firmware and model with the validated systems above.
+
+## Intentional exclusions
+
+The template does not collect:
+
+- Full `audit-log`, because it was extremely large and truncated in testing
+- `workload`, which is mainly intended for tiering and capacity analysis
+- `metrics-list` continuously; the 4006 system-latency collector queries the
+  required metrics directly
+- `fan-modules`, which returned HTTP 400 on the tested 4006; `show fans` supplies
+  the required data
+- `host-phy-statistics`, which is SAS-host-specific and did not apply to the
+  tested configuration
+- `remote-systems`, which returned HTTP 400 on the tested 4006
+
+## Validation
+
+Release 1.1.0 passed offline YAML, UUID format and uniqueness, heartbeat,
+HTTP-proxy, dashboard-reference, and severity-policy checks. The monitoring
+logic is already in production use; the upstream-compatible packaging and
+1.1.0 conformance changes were validated structurally.
+
+- Zabbix export version: `7.0`
+- UUID fields: `427`, all correctly formatted and unique
+- Script master items: `5`, all passing JavaScript syntax and HTTP-proxy checks
+- Dashboard: `1` dashboard, `2` pages, and `14` widgets with valid references
+- Heartbeats: `76` occurrences of `30m` and no remaining `1d` heartbeat
+- Trigger policy: no Disaster triggers; degraded states use Average
+- SHA-256: `51daf147ad05a2835ae69ffd404945466f9e756a528c2165275b0409da6811fa`
+
+A separate clean-instance import was intentionally not executed for 1.1.0 at
+the maintainer's request.
+
+## Vendor documentation
+
+- [Seagate Exos X 4006 support](https://www.seagate.com/support/disk-arrays/exos-x-4006/)
+- [Seagate Exos X 4006 Series Storage Management Guide](https://www.seagate.com/content/dam/seagate/assets/support/disk-arrays/exos-x-4006-2u12/_shared/files/204468700-01-A_4006_SMG.pdf)
+
+## Version
+
+- Template version: `1.1.0`
+- Minimum Zabbix version: `7.0`
+- Export format: Zabbix `7.0`
+
+## Author and license
+
+- Author: [Guilherme Campos (@guicampos21)](https://github.com/guicampos21)
+- Maintainer/vendor: SentrixIT
+- License: [MIT](https://github.com/guicampos21/zabbix-templates/blob/main/LICENSE)
+
+## Release history
+
+### 1.1.0
+
+- Reorganized the template into the upstream-compatible
+  `template_seagate_exos_x_4005_4006/7.0/` directory layout.
+- Renamed the import file to `template_seagate_exos_x_4005_4006.yaml`.
+- Added a Full HD template dashboard with Overview and Components pages.
+- Added `{$SEAGATE.HTTP.PROXY}` to every Script master item.
+- Changed the default least-privilege API username to `zbx_monitor`.
+- Aligned template tags with the Zabbix storage classification.
+- Changed resource-level Disaster triggers to High and degraded-state triggers
+  from High to Average.
+- Added the author and MIT license metadata required for upstream submission.
+
+### 1.0.7
+
+- Changed the inventory interval and all former one-day preprocessing
+  heartbeats to `30m`, ensuring dashboard-facing unchanged values are stored at
+  least every 30 minutes.
+- Left one-hour heartbeats and core, performance, availability, and event
+  polling intervals unchanged.
+
+### 1.0.6
+
+- Added unified system read and write average latency.
+- Added native average and maximum system latency for Exos X 4006.
+- Added an I/O-weighted host-port fallback for the tested 4005/4865 API.
+- Added average and maximum system-latency graphs and source identification.
+- Corrected fixed graph placement in the Zabbix 7.0 export hierarchy.
+
+### 1.0.4
+
+- Refined disconnected expansion-port handling.
+- Added the expected-enclosure policy and related High-severity trigger.
+
+<!-- BEGIN GENERATED MONITORING INVENTORY -->
+## Complete monitoring inventory
+
+Complete inventory generated from the Zabbix 7.0 YAML export, version 1.1.0.
 It includes fixed objects and low-level discovery (LLD) prototypes.
 
 > [!NOTE]
@@ -9,7 +452,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 > Trigger source identifies the item prototype that owns the trigger in the
 > Zabbix export; an expression can reference additional items.
 
-## Summary
+### Inventory summary
 
 | Object | Count |
 |---|---:|
@@ -20,10 +463,13 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Trigger prototypes | 80 |
 | Fixed graphs | 2 |
 | Graph prototypes | 19 |
+| Template dashboards | 1 |
+| Dashboard pages | 2 |
+| Dashboard widgets | 14 |
 
-## Fixed items
+### Fixed items
 
-### Alerts
+#### Alerts
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
@@ -32,14 +478,14 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Active error alert count | `seagate.exos.alerts.active_error` | `DEPENDENT` | `UNSIGNED` |
 | Active critical alert count | `seagate.exos.alerts.active_critical` | `DEPENDENT` | `UNSIGNED` |
 
-### Cache
+#### Cache
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
 | Controller A unwritable cache | `seagate.exos.cache.unwritable_a` | `DEPENDENT` | `UNSIGNED` |
 | Controller B unwritable cache | `seagate.exos.cache.unwritable_b` | `DEPENDENT` | `UNSIGNED` |
 
-### Errors
+#### Errors
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
@@ -49,7 +495,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Inventory API method errors | `seagate.exos.inventory.errors` | `DEPENDENT` | `TEXT` |
 | Events API method errors | `seagate.exos.events.errors` | `DEPENDENT` | `TEXT` |
 
-### Events
+#### Events
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
@@ -60,7 +506,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Latest critical event ID | `seagate.exos.event.latest_critical.id` | `DEPENDENT` | `UNSIGNED` |
 | Latest critical event message | `seagate.exos.event.latest_critical.message` | `DEPENDENT` | `TEXT` |
 
-### Health
+#### Health
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
@@ -71,7 +517,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Redundancy state | `seagate.exos.system.redundant` | `DEPENDENT` | `UNSIGNED` |
 | Other management controller operational | `seagate.exos.system.other_mc_operational` | `DEPENDENT` | `UNSIGNED` |
 
-### Inventory
+#### Inventory
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
@@ -84,7 +530,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | System firmware bundle | `seagate.exos.system.bundle_version` | `DEPENDENT` | `CHAR` |
 | Structured Alerts API supported | `seagate.exos.alerts.supported` | `DEPENDENT` | `UNSIGNED` |
 
-### Performance
+#### Performance
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
@@ -100,7 +546,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | System: Read average response time | `seagate.exos.system.latency.read_avg` | `CALCULATED` | `FLOAT` |
 | System: Write average response time | `seagate.exos.system.latency.write_avg` | `CALCULATED` | `FLOAT` |
 
-### Raw
+#### Raw
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
@@ -137,31 +583,31 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Get events | `seagate.exos.get.eventlist` | `DEPENDENT` | `TEXT` |
 | Get active alerts | `seagate.exos.get.alerts` | `DEPENDENT` | `TEXT` |
 
-### SAS
+#### SAS
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
 | Unhealthy expander PHY count | `seagate.exos.expander.unhealthy` | `DEPENDENT` | `UNSIGNED` |
 
-### Security
+#### Security
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
 | FDE security status | `seagate.exos.system.fde_status` | `DEPENDENT` | `CHAR` |
 
-### Storage
+#### Storage
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
 | Enclosure count | `seagate.exos.system.enclosure_count` | `DEPENDENT` | `UNSIGNED` |
 
-### Time
+#### Time
 
 | Item | Key | Type | Value type |
 |---|---|---|---|
 | NTP enabled | `seagate.exos.system.ntp_enabled` | `DEPENDENT` | `UNSIGNED` |
 
-## Fixed triggers
+### Fixed triggers
 
 | Trigger | Severity | Source item |
 |---|---|---|
@@ -172,8 +618,8 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Seagate Exos Storage: Inventory API method errors | `WARNING` | Inventory API method errors |
 | Seagate Exos Storage: Events API method errors | `WARNING` | Events API method errors |
 | Seagate Exos Storage: Enclosure count is below expected | `HIGH` | Enclosure count |
-| Seagate Exos Storage: System health is degraded | `HIGH` | System health |
-| Seagate Exos Storage: System health is in fault state | `DISASTER` | System health |
+| Seagate Exos Storage: System health is degraded | `AVERAGE` | System health |
+| Seagate Exos Storage: System health is in fault state | `HIGH` | System health |
 | Seagate Exos Storage: System health is unknown | `WARNING` | System health |
 | Seagate Exos Storage: Storage redundancy is lost | `HIGH` | Redundancy state |
 | Seagate Exos Storage: Partner management controller is not operational | `WARNING` | Other management controller operational |
@@ -185,21 +631,49 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Seagate Exos Storage: System firmware bundle changed | `INFO` | System firmware bundle |
 | Seagate Exos Storage: New warning event detected | `WARNING` | Latest warning event ID |
 | Seagate Exos Storage: New error event detected | `HIGH` | Latest error event ID |
-| Seagate Exos Storage: New critical event detected | `DISASTER` | Latest critical event ID |
+| Seagate Exos Storage: New critical event detected | `HIGH` | Latest critical event ID |
 | Seagate Exos Storage: Active warning alert conditions | `WARNING` | Active warning alert count |
 | Seagate Exos Storage: Active error alert conditions | `HIGH` | Active error alert count |
-| Seagate Exos Storage: Active critical alert conditions | `DISASTER` | Active critical alert count |
+| Seagate Exos Storage: Active critical alert conditions | `HIGH` | Active critical alert count |
 
-## Fixed graphs
+### Fixed graphs
 
 | Graph | Item keys |
 |---|---|
 | System latency | `seagate.exos.system.latency.read_avg`<br>`seagate.exos.system.latency.write_avg` |
 | System maximum latency (4006 native) | `seagate.exos.system.latency.read_max`<br>`seagate.exos.system.latency.write_max` |
 
-## Low-level discovery
+### Template dashboards
 
-### Controllers discovery
+#### Overview
+
+##### Overview
+
+| Widget | Type | Referenced object |
+|---|---|---|
+| API availability | `item` | seagate.exos.api.available |
+| System health | `item` | seagate.exos.system.health |
+| Product | `item` | seagate.exos.system.product_id |
+| Firmware bundle | `item` | seagate.exos.system.bundle_version |
+| System latency source | `item` | seagate.exos.system.latency.source |
+| Average system latency | `graph` | System latency |
+| Maximum system latency | `graph` | System maximum latency (4006 native) |
+| Active problems | `problems` |  |
+
+##### Components
+
+| Widget | Type | Referenced object |
+|---|---|---|
+| Controller performance | `graphprototype` | Controller [{#CONTROLLER.ID}]: Performance |
+| Disk performance | `graphprototype` | Disk [{#LOCATION}]: Performance |
+| Pool performance | `graphprototype` | Pool [{#NAME}]: Performance |
+| Volume performance | `graphprototype` | Volume [{#NAME}]: Performance |
+| Host port performance | `graphprototype` | Host port [{#PORT.ID}]: Performance |
+| Disk temperature | `graphprototype` | Disk [{#LOCATION}]: Temperature |
+
+### Low-level discovery
+
+#### Controllers discovery
 
 - Discovery key: `seagate.exos.controllers.discovery`
 - Discovery type: `DEPENDENT`
@@ -207,7 +681,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 - Trigger prototypes: 7
 - Graph prototypes: 2
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -239,7 +713,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Controller [{#CONTROLLER.ID}]: Forwarded commands | `seagate.exos.controller.forwarded["{#CONTROLLER.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 | Controller [{#CONTROLLER.ID}]: Power-on hours | `seagate.exos.controller.power_on_hours["{#CONTROLLER.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
@@ -251,14 +725,14 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Seagate Exos Storage: Controller [{#CONTROLLER.ID}] is failed over | `HIGH` | Controller [{#CONTROLLER.ID}]: Failed over |
 | Seagate Exos Storage: Controller [{#CONTROLLER.ID}] CPU utilization is high | `WARNING` | Controller [{#CONTROLLER.ID}]: CPU utilization |
 
-#### Graph prototypes
+##### Graph prototypes
 
 | Graph prototype | Item prototype keys |
 |---|---|
 | Controller [{#CONTROLLER.ID}]: Performance | `seagate.exos.controller.cpu["{#CONTROLLER.ID}"]`<br>`seagate.exos.controller.iops["{#CONTROLLER.ID}"]`<br>`seagate.exos.controller.bps["{#CONTROLLER.ID}"]` |
 | Controller [{#CONTROLLER.ID}]: Cache utilization | `seagate.exos.controller.write_cache_used["{#CONTROLLER.ID}"]` |
 
-### Physical disks discovery
+#### Physical disks discovery
 
 - Discovery key: `seagate.exos.disks.discovery`
 - Discovery type: `DEPENDENT`
@@ -266,7 +740,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 - Trigger prototypes: 17
 - Graph prototypes: 2
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -303,12 +777,12 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Disk [{#LOCATION}]: Bad blocks | `seagate.exos.disk.bad_blocks["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 | Disk [{#LOCATION}]: Block reassignments | `seagate.exos.disk.reassigns["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
-| Seagate Exos Storage: Disk [{#LOCATION}] health is degraded | `HIGH` | Disk [{#LOCATION}]: Health |
-| Seagate Exos Storage: Disk [{#LOCATION}] health is in fault state | `DISASTER` | Disk [{#LOCATION}]: Health |
+| Seagate Exos Storage: Disk [{#LOCATION}] health is degraded | `AVERAGE` | Disk [{#LOCATION}]: Health |
+| Seagate Exos Storage: Disk [{#LOCATION}] health is in fault state | `HIGH` | Disk [{#LOCATION}]: Health |
 | Seagate Exos Storage: Disk [{#LOCATION}] health is unknown | `WARNING` | Disk [{#LOCATION}]: Health |
 | Seagate Exos Storage: Disk [{#LOCATION}] is not Up | `HIGH` | Disk [{#LOCATION}]: Status |
 | Seagate Exos Storage: Disk [{#LOCATION}] firmware changed | `INFO` | Disk [{#LOCATION}]: Firmware revision |
@@ -325,14 +799,14 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Seagate Exos Storage: Disk [{#LOCATION}] bad blocks increased | `HIGH` | Disk [{#LOCATION}]: Bad blocks |
 | Seagate Exos Storage: Disk [{#LOCATION}] block reassignments increased | `WARNING` | Disk [{#LOCATION}]: Block reassignments |
 
-#### Graph prototypes
+##### Graph prototypes
 
 | Graph prototype | Item prototype keys |
 |---|---|
 | Disk [{#LOCATION}]: Performance | `seagate.exos.disk.iops["{#DURABLE.ID}"]`<br>`seagate.exos.disk.bps["{#DURABLE.ID}"]` |
 | Disk [{#LOCATION}]: Temperature | `seagate.exos.disk.temperature["{#DURABLE.ID}"]` |
 
-### Disk groups discovery
+#### Disk groups discovery
 
 - Discovery key: `seagate.exos.diskgroups.discovery`
 - Discovery type: `DEPENDENT`
@@ -340,7 +814,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 - Trigger prototypes: 11
 - Graph prototypes: 3
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -369,23 +843,23 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Disk group [{#NAME}]: Read response time | `seagate.exos.diskgroup.read_latency["{#NAME}"]` | `DEPENDENT` | `FLOAT` |
 | Disk group [{#NAME}]: Write response time | `seagate.exos.diskgroup.write_latency["{#NAME}"]` | `DEPENDENT` | `FLOAT` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
-| Seagate Exos Storage: Disk group [{#NAME}] health is degraded | `HIGH` | Disk group [{#NAME}]: Health |
-| Seagate Exos Storage: Disk group [{#NAME}] health is in fault state | `DISASTER` | Disk group [{#NAME}]: Health |
+| Seagate Exos Storage: Disk group [{#NAME}] health is degraded | `AVERAGE` | Disk group [{#NAME}]: Health |
+| Seagate Exos Storage: Disk group [{#NAME}] health is in fault state | `HIGH` | Disk group [{#NAME}]: Health |
 | Seagate Exos Storage: Disk group [{#NAME}] health is unknown | `WARNING` | Disk group [{#NAME}]: Health |
-| Seagate Exos Storage: Disk group [{#NAME}] is degraded | `HIGH` | Disk group [{#NAME}]: Status |
-| Seagate Exos Storage: Disk group [{#NAME}] is critical or offline | `DISASTER` | Disk group [{#NAME}]: Status |
+| Seagate Exos Storage: Disk group [{#NAME}] is degraded | `AVERAGE` | Disk group [{#NAME}]: Status |
+| Seagate Exos Storage: Disk group [{#NAME}] is critical or offline | `HIGH` | Disk group [{#NAME}]: Status |
 | Seagate Exos Storage: Disk group [{#NAME}] job state changed | `INFO` | Disk group [{#NAME}]: Current job |
 | Seagate Exos Storage: Disk group [{#NAME}] owner differs from preferred owner | `WARNING` | Disk group [{#NAME}]: Owner numeric |
 | Seagate Exos Storage: Disk group [{#NAME}] write-back is disabled | `HIGH` | Disk group [{#NAME}]: Write-back enabled |
 | Seagate Exos Storage: Disk group [{#NAME}] utilization is high | `WARNING` | Disk group [{#NAME}]: Used capacity |
 | Seagate Exos Storage: Disk group [{#NAME}] utilization is very high | `HIGH` | Disk group [{#NAME}]: Used capacity |
-| Seagate Exos Storage: Disk group [{#NAME}] utilization is critical | `DISASTER` | Disk group [{#NAME}]: Used capacity |
+| Seagate Exos Storage: Disk group [{#NAME}] utilization is critical | `HIGH` | Disk group [{#NAME}]: Used capacity |
 
-#### Graph prototypes
+##### Graph prototypes
 
 | Graph prototype | Item prototype keys |
 |---|---|
@@ -393,7 +867,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Disk group [{#NAME}]: Response time | `seagate.exos.diskgroup.latency["{#NAME}"]`<br>`seagate.exos.diskgroup.read_latency["{#NAME}"]`<br>`seagate.exos.diskgroup.write_latency["{#NAME}"]` |
 | Disk group [{#NAME}]: Space utilization | `seagate.exos.diskgroup.used_pct["{#NAME}"]` |
 
-### Pools discovery
+#### Pools discovery
 
 - Discovery key: `seagate.exos.pools.discovery`
 - Discovery type: `DEPENDENT`
@@ -401,7 +875,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 - Trigger prototypes: 7
 - Graph prototypes: 3
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -418,19 +892,19 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Pool [{#NAME}]: Read response time | `seagate.exos.pool.read_latency["{#NAME}"]` | `DEPENDENT` | `FLOAT` |
 | Pool [{#NAME}]: Write response time | `seagate.exos.pool.write_latency["{#NAME}"]` | `DEPENDENT` | `FLOAT` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
-| Seagate Exos Storage: Pool [{#NAME}] health is degraded | `HIGH` | Pool [{#NAME}]: Health |
-| Seagate Exos Storage: Pool [{#NAME}] health is in fault state | `DISASTER` | Pool [{#NAME}]: Health |
+| Seagate Exos Storage: Pool [{#NAME}] health is degraded | `AVERAGE` | Pool [{#NAME}]: Health |
+| Seagate Exos Storage: Pool [{#NAME}] health is in fault state | `HIGH` | Pool [{#NAME}]: Health |
 | Seagate Exos Storage: Pool [{#NAME}] health is unknown | `WARNING` | Pool [{#NAME}]: Health |
 | Seagate Exos Storage: Pool [{#NAME}] utilization is high | `WARNING` | Pool [{#NAME}]: Used capacity |
 | Seagate Exos Storage: Pool [{#NAME}] utilization is very high | `HIGH` | Pool [{#NAME}]: Used capacity |
-| Seagate Exos Storage: Pool [{#NAME}] utilization is critical | `DISASTER` | Pool [{#NAME}]: Used capacity |
+| Seagate Exos Storage: Pool [{#NAME}] utilization is critical | `HIGH` | Pool [{#NAME}]: Used capacity |
 | Seagate Exos Storage: Pool [{#NAME}] is overcommitted | `HIGH` | Pool [{#NAME}]: Overcommitted |
 
-#### Graph prototypes
+##### Graph prototypes
 
 | Graph prototype | Item prototype keys |
 |---|---|
@@ -438,7 +912,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Pool [{#NAME}]: Response time | `seagate.exos.pool.latency["{#NAME}"]`<br>`seagate.exos.pool.read_latency["{#NAME}"]`<br>`seagate.exos.pool.write_latency["{#NAME}"]` |
 | Pool [{#NAME}]: Space utilization | `seagate.exos.pool.used_pct["{#NAME}"]` |
 
-### Volumes discovery
+#### Volumes discovery
 
 - Discovery key: `seagate.exos.volumes.discovery`
 - Discovery type: `DEPENDENT`
@@ -446,7 +920,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 - Trigger prototypes: 6
 - Graph prototypes: 1
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -472,7 +946,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Volume [{#NAME}]: Writes | `seagate.exos.volume.writes["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 | Volume [{#NAME}]: Write cache utilization | `seagate.exos.volume.write_cache_pct["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
@@ -483,13 +957,13 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Seagate Exos Storage: Volume [{#NAME}] is not using write-back | `HIGH` | Volume [{#NAME}]: Write-back enabled |
 | Seagate Exos Storage: Volume [{#NAME}] operation is active | `INFO` | Volume [{#NAME}]: Operation progress |
 
-#### Graph prototypes
+##### Graph prototypes
 
 | Graph prototype | Item prototype keys |
 |---|---|
 | Volume [{#NAME}]: Performance | `seagate.exos.volume.iops["{#DURABLE.ID}"]`<br>`seagate.exos.volume.bps["{#DURABLE.ID}"]` |
 
-### Storage tiers discovery
+#### Storage tiers discovery
 
 - Discovery key: `seagate.exos.tiers.discovery`
 - Discovery type: `DEPENDENT`
@@ -497,7 +971,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 - Trigger prototypes: 2
 - Graph prototypes: 3
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -518,14 +992,14 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Tier [{#POOL}/{#TIER}]: Pages deallocated per minute | `seagate.exos.tier.pages_dealloc["{#SERIAL}"]` | `DEPENDENT` | `UNSIGNED` |
 | Tier [{#POOL}/{#TIER}]: Pages reclaimed | `seagate.exos.tier.pages_reclaimed["{#SERIAL}"]` | `DEPENDENT` | `UNSIGNED` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
 | Seagate Exos Storage: Tier [{#POOL}/{#TIER}] utilization is high | `WARNING` | Tier [{#POOL}/{#TIER}]: Used capacity |
 | Seagate Exos Storage: Tier [{#POOL}/{#TIER}] utilization is critical | `HIGH` | Tier [{#POOL}/{#TIER}]: Used capacity |
 
-#### Graph prototypes
+##### Graph prototypes
 
 | Graph prototype | Item prototype keys |
 |---|---|
@@ -533,7 +1007,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Tier [{#POOL}/{#TIER}]: Response time | `seagate.exos.tier.latency["{#SERIAL}"]`<br>`seagate.exos.tier.read_latency["{#SERIAL}"]`<br>`seagate.exos.tier.write_latency["{#SERIAL}"]` |
 | Tier [{#POOL}/{#TIER}]: Space utilization | `seagate.exos.tier.used_pct["{#SERIAL}"]` |
 
-### Enclosures discovery
+#### Enclosures discovery
 
 - Discovery key: `seagate.exos.enclosures.discovery`
 - Discovery type: `DEPENDENT`
@@ -541,7 +1015,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 - Trigger prototypes: 4
 - Graph prototypes: 1
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -557,22 +1031,22 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | Enclosure [{#ENCLOSURE.ID}]: Cooling element count | `seagate.exos.enclosure.coolingcount["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 | Enclosure [{#ENCLOSURE.ID}]: Power consumption | `seagate.exos.enclosure.power["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
-| Seagate Exos Storage: Enclosure [{#ENCLOSURE.ID}] health is degraded | `HIGH` | Enclosure [{#ENCLOSURE.ID}]: Health |
-| Seagate Exos Storage: Enclosure [{#ENCLOSURE.ID}] health is in fault state | `DISASTER` | Enclosure [{#ENCLOSURE.ID}]: Health |
+| Seagate Exos Storage: Enclosure [{#ENCLOSURE.ID}] health is degraded | `AVERAGE` | Enclosure [{#ENCLOSURE.ID}]: Health |
+| Seagate Exos Storage: Enclosure [{#ENCLOSURE.ID}] health is in fault state | `HIGH` | Enclosure [{#ENCLOSURE.ID}]: Health |
 | Seagate Exos Storage: Enclosure [{#ENCLOSURE.ID}] health is unknown | `WARNING` | Enclosure [{#ENCLOSURE.ID}]: Health |
 | Seagate Exos Storage: Enclosure [{#ENCLOSURE.ID}] status is abnormal | `HIGH` | Enclosure [{#ENCLOSURE.ID}]: Status |
 
-#### Graph prototypes
+##### Graph prototypes
 
 | Graph prototype | Item prototype keys |
 |---|---|
 | Enclosure [{#ENCLOSURE.ID}]: Power consumption | `seagate.exos.enclosure.power["{#DURABLE.ID}"]` |
 
-### FRUs discovery
+#### FRUs discovery
 
 - Discovery key: `seagate.exos.frus.discovery`
 - Discovery type: `DEPENDENT`
@@ -580,7 +1054,7 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 - Trigger prototypes: 1
 - Graph prototypes: 0
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -591,17 +1065,17 @@ It includes fixed objects and low-level discovery (LLD) prototypes.
 | FRU [{#NAME}/{#LOCATION}]: Revision | `seagate.exos.fru.revision["{#LLD.ID}"]` | `DEPENDENT` | `CHAR` |
 | FRU [{#NAME}/{#LOCATION}]: Description | `seagate.exos.fru.description["{#LLD.ID}"]` | `DEPENDENT` | `TEXT` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
 | Seagate Exos Storage: FRU [{#NAME}/{#LOCATION}] status is abnormal | `HIGH` | FRU [{#NAME}/{#LOCATION}]: Status |
 
-#### Graph prototypes
+##### Graph prototypes
 
 No graph prototypes.
 
-### Fans discovery
+#### Fans discovery
 
 - Discovery key: `seagate.exos.fans.discovery`
 - Discovery type: `DEPENDENT`
@@ -609,7 +1083,7 @@ No graph prototypes.
 - Trigger prototypes: 5
 - Graph prototypes: 1
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -618,23 +1092,23 @@ No graph prototypes.
 | Fan [{#NAME}/{#LOCATION}]: Status | `seagate.exos.fan.status["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 | Fan [{#NAME}/{#LOCATION}]: Speed | `seagate.exos.fan.speed["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
-| Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] health is degraded | `HIGH` | Fan [{#NAME}/{#LOCATION}]: Health |
-| Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] health is in fault state | `DISASTER` | Fan [{#NAME}/{#LOCATION}]: Health |
+| Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] health is degraded | `AVERAGE` | Fan [{#NAME}/{#LOCATION}]: Health |
+| Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] health is in fault state | `HIGH` | Fan [{#NAME}/{#LOCATION}]: Health |
 | Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] health is unknown | `WARNING` | Fan [{#NAME}/{#LOCATION}]: Health |
 | Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] is not Up | `HIGH` | Fan [{#NAME}/{#LOCATION}]: Status |
 | Seagate Exos Storage: Fan [{#NAME}/{#LOCATION}] speed is zero | `HIGH` | Fan [{#NAME}/{#LOCATION}]: Speed |
 
-#### Graph prototypes
+##### Graph prototypes
 
 | Graph prototype | Item prototype keys |
 |---|---|
 | Fan [{#NAME}/{#LOCATION}]: Speed | `seagate.exos.fan.speed["{#DURABLE.ID}"]` |
 
-### Power supplies discovery
+#### Power supplies discovery
 
 - Discovery key: `seagate.exos.psus.discovery`
 - Discovery type: `DEPENDENT`
@@ -642,7 +1116,7 @@ No graph prototypes.
 - Trigger prototypes: 4
 - Graph prototypes: 0
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -654,20 +1128,20 @@ No graph prototypes.
 | Power supply [{#LOCATION}]: Firmware | `seagate.exos.psu.firmware["{#DURABLE.ID}"]` | `DEPENDENT` | `CHAR` |
 | Power supply [{#LOCATION}]: Model | `seagate.exos.psu.model["{#DURABLE.ID}"]` | `DEPENDENT` | `CHAR` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
-| Seagate Exos Storage: Power supply [{#LOCATION}] health is degraded | `HIGH` | Power supply [{#LOCATION}]: Health |
-| Seagate Exos Storage: Power supply [{#LOCATION}] health is in fault state | `DISASTER` | Power supply [{#LOCATION}]: Health |
+| Seagate Exos Storage: Power supply [{#LOCATION}] health is degraded | `AVERAGE` | Power supply [{#LOCATION}]: Health |
+| Seagate Exos Storage: Power supply [{#LOCATION}] health is in fault state | `HIGH` | Power supply [{#LOCATION}]: Health |
 | Seagate Exos Storage: Power supply [{#LOCATION}] health is unknown | `WARNING` | Power supply [{#LOCATION}]: Health |
 | Seagate Exos Storage: Power supply [{#LOCATION}] status is abnormal | `HIGH` | Power supply [{#LOCATION}]: Status |
 
-#### Graph prototypes
+##### Graph prototypes
 
 No graph prototypes.
 
-### Sensors discovery
+#### Sensors discovery
 
 - Discovery key: `seagate.exos.sensors.discovery`
 - Discovery type: `DEPENDENT`
@@ -675,7 +1149,7 @@ No graph prototypes.
 - Trigger prototypes: 2
 - Graph prototypes: 0
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -684,18 +1158,18 @@ No graph prototypes.
 | Sensor [{#NAME}]: Value | `seagate.exos.sensor.value["{#DURABLE.ID}"]` | `DEPENDENT` | `CHAR` |
 | Sensor [{#NAME}]: Type | `seagate.exos.sensor.type["{#DURABLE.ID}"]` | `DEPENDENT` | `CHAR` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
 | Seagate Exos Storage: Sensor [{#NAME}] reports Warning | `WARNING` | Sensor [{#NAME}]: Status |
 | Seagate Exos Storage: Sensor [{#NAME}] reports Critical or Unrecoverable | `HIGH` | Sensor [{#NAME}]: Status |
 
-#### Graph prototypes
+##### Graph prototypes
 
 No graph prototypes.
 
-### SAS links discovery
+#### SAS links discovery
 
 - Discovery key: `seagate.exos.saslinks.discovery`
 - Discovery type: `DEPENDENT`
@@ -703,7 +1177,7 @@ No graph prototypes.
 - Trigger prototypes: 4
 - Graph prototypes: 0
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -711,20 +1185,20 @@ No graph prototypes.
 | SAS link [{#NAME}]: Health | `seagate.exos.saslink.health["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 | SAS link [{#NAME}]: Status | `seagate.exos.saslink.status["{#DURABLE.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
-| Seagate Exos Storage: SAS link [{#NAME}] health is degraded | `HIGH` | SAS link [{#NAME}]: Health |
-| Seagate Exos Storage: SAS link [{#NAME}] health is in fault state | `DISASTER` | SAS link [{#NAME}]: Health |
+| Seagate Exos Storage: SAS link [{#NAME}] health is degraded | `AVERAGE` | SAS link [{#NAME}]: Health |
+| Seagate Exos Storage: SAS link [{#NAME}] health is in fault state | `HIGH` | SAS link [{#NAME}]: Health |
 | Seagate Exos Storage: SAS link [{#NAME}] health is unknown | `WARNING` | SAS link [{#NAME}]: Health |
 | Seagate Exos Storage: SAS link [{#NAME}] status is abnormal | `HIGH` | SAS link [{#NAME}]: Status |
 
-#### Graph prototypes
+##### Graph prototypes
 
 No graph prototypes.
 
-### Host ports discovery
+#### Host ports discovery
 
 - Discovery key: `seagate.exos.ports.discovery`
 - Discovery type: `DEPENDENT`
@@ -732,7 +1206,7 @@ No graph prototypes.
 - Trigger prototypes: 7
 - Graph prototypes: 3
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -759,11 +1233,11 @@ No graph prototypes.
 | Host port [{#PORT.ID}]: Read response time | `seagate.exos.port.read_latency["{#DURABLE.ID}"]` | `DEPENDENT` | `FLOAT` |
 | Host port [{#PORT.ID}]: Write response time | `seagate.exos.port.write_latency["{#DURABLE.ID}"]` | `DEPENDENT` | `FLOAT` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
-| Seagate Exos Storage: Host port [{#PORT.ID}] health is degraded | `HIGH` | Host port [{#PORT.ID}]: Health |
+| Seagate Exos Storage: Host port [{#PORT.ID}] health is degraded | `AVERAGE` | Host port [{#PORT.ID}]: Health |
 | Seagate Exos Storage: Host port [{#PORT.ID}] health is in fault state | `HIGH` | Host port [{#PORT.ID}]: Health |
 | Seagate Exos Storage: Host port [{#PORT.ID}] health is unknown | `WARNING` | Host port [{#PORT.ID}]: Health |
 | Seagate Exos Storage: Host port [{#PORT.ID}] is down | `HIGH` | Host port [{#PORT.ID}]: Status |
@@ -771,7 +1245,7 @@ No graph prototypes.
 | Seagate Exos Storage: SFP removed from host port [{#PORT.ID}] | `HIGH` | Host port [{#PORT.ID}]: SFP present |
 | Seagate Exos Storage: SFP status is abnormal on host port [{#PORT.ID}] | `HIGH` | Host port [{#PORT.ID}]: SFP status |
 
-#### Graph prototypes
+##### Graph prototypes
 
 | Graph prototype | Item prototype keys |
 |---|---|
@@ -779,7 +1253,7 @@ No graph prototypes.
 | Host port [{#PORT.ID}]: Response time | `seagate.exos.port.latency["{#DURABLE.ID}"]`<br>`seagate.exos.port.read_latency["{#DURABLE.ID}"]`<br>`seagate.exos.port.write_latency["{#DURABLE.ID}"]` |
 | Host port [{#PORT.ID}]: Queue depth | `seagate.exos.port.queue_depth["{#DURABLE.ID}"]` |
 
-### Replication sets discovery
+#### Replication sets discovery
 
 - Discovery key: `seagate.exos.replications.discovery`
 - Discovery type: `DEPENDENT`
@@ -787,7 +1261,7 @@ No graph prototypes.
 - Trigger prototypes: 3
 - Graph prototypes: 0
 
-#### Item prototypes
+##### Item prototypes
 
 | Item prototype | Key | Type | Value type |
 |---|---|---|---|
@@ -795,14 +1269,15 @@ No graph prototypes.
 | Replication set [{#NAME}]: Health | `seagate.exos.replication.health["{#LLD.ID}"]` | `DEPENDENT` | `UNSIGNED` |
 | Replication set [{#NAME}]: Status | `seagate.exos.replication.status["{#LLD.ID}"]` | `DEPENDENT` | `CHAR` |
 
-#### Trigger prototypes
+##### Trigger prototypes
 
 | Trigger prototype | Severity | Source item prototype |
 |---|---|---|
-| Seagate Exos Storage: Replication set [{#NAME}] health is degraded | `HIGH` | Replication set [{#NAME}]: Health |
-| Seagate Exos Storage: Replication set [{#NAME}] health is in fault state | `DISASTER` | Replication set [{#NAME}]: Health |
+| Seagate Exos Storage: Replication set [{#NAME}] health is degraded | `AVERAGE` | Replication set [{#NAME}]: Health |
+| Seagate Exos Storage: Replication set [{#NAME}] health is in fault state | `HIGH` | Replication set [{#NAME}]: Health |
 | Seagate Exos Storage: Replication set [{#NAME}] health is unknown | `WARNING` | Replication set [{#NAME}]: Health |
 
-#### Graph prototypes
+##### Graph prototypes
 
 No graph prototypes.
+<!-- END GENERATED MONITORING INVENTORY -->
