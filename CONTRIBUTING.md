@@ -52,7 +52,7 @@ Templates are versioned independently. Use release tags in this format:
 For example:
 
 ```text
-seagate-exos-x-4005-4006-v1.1.1
+seagate-exos-x-4005-4006-v1.1.2
 ```
 
 Each GitHub Release should represent one template, use the same template-scoped

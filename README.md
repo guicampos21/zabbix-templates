@@ -12,7 +12,7 @@ contains only the importable template and its complete README.
 
 | Template | Category | Method | Minimum Zabbix | Version |
 |---|---|---|---:|---:|
-| [Seagate Exos X 4005/4006 Storage](templates/storage/template_seagate_exos_x_4005_4006/7.0/) | Storage | HTTP/JSON API | 7.0 | 1.1.1 |
+| [Seagate Exos X 4005/4006 Storage](templates/storage/template_seagate_exos_x_4005_4006/7.0/) | Storage | HTTP/JSON API | 7.0 | 1.1.2 |
 
 ## Repository layout
 
@@ -36,7 +36,7 @@ repository, but each release represents one template. Tags and release names
 include the template name to avoid ambiguity:
 
 ```text
-seagate-exos-x-4005-4006-v1.1.1
+seagate-exos-x-4005-4006-v1.1.2
 ```
 
 The importable YAML is attached to its GitHub Release with a versioned filename.
